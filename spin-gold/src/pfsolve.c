@@ -83,7 +83,7 @@ static float RAISES[3][4]; static int NRAISES[3];
 static int MAXBETS[3];
 
 static int NH[2]; static uint8_t *HC[2]; static float *W[2]; static int32_t *SAME[2]; static int HMAX;
-static Node *NODES; static int NN, NNODES; static float *ARENA; static size_t NF, NFLOATS; static int PASS;
+static Node *NODES; static int NN, NNODES; static int16_t *ARENA; static float *SCALE; static size_t NF, NFLOATS; static int PASS;
 static int32_t TBLMAP[52 * 52]; static int NTBL; static uint8_t (*TBLBOARD)[5];
 static int32_t *TBL_IDX[2]; static uint32_t *TBL_STR[2]; static int32_t *TBL_OFF[2], *TBL_N[2];
 static float *SCRATCH; static size_t SCR_TOP, SCR_CAP;
@@ -217,21 +217,23 @@ EXPORT("pf_estimate") double pf_estimate(void) {
   read_cfg();
   for (int p = 0; p < 2; p++) { int n = 0; for (int b = 1; b < 52; b++) for (int a = 0; a < b; a++) n += valid_combo(p, a, b); NH[p] = n; }
   count_tree(); EST_NODES = NN;
-  EST_BYTES = (double)NN * sizeof(Node) + (double)NF * 4 + (double)NTBL * (NH[0] + NH[1]) * 8 + 8e6;
+  EST_BYTES = (double)NN * (sizeof(Node) + 8) + (double)NF * 2 + (double)NTBL * (NH[0] + NH[1]) * 8 + 8e6;
   return EST_BYTES;
 }
 EXPORT("pf_est_nodes") int pf_est_nodes(void) { return EST_NODES; }
 EXPORT("pf_est_floats") double pf_est_floats(void) { return (double)NF; }
 EXPORT("pf_reset") void pf_reset(void) { heap_reset(); CFG = 0; WIN = 0; NODES = 0; ARENA = 0; }
-static int ITER; static float *QBUF; static size_t QCAP;
+static int ITER; static float *QBUF; static size_t QCAP; static float *REACHBUF, *VALBUF; static size_t VALCAP;
 EXPORT("pf_setup") int pf_setup(void) {
-  QBUF = 0; QCAP = 0;
+  QBUF = 0; QCAP = 0; REACHBUF = 0; VALBUF = 0; VALCAP = 0;
   read_cfg();
   if (make_hands()) return -1;
   count_tree(); NNODES = NN; NFLOATS = NF;
   NODES = xalloc(sizeof(Node) * (size_t)NNODES); if (!NODES) return -2;
-  ARENA = xalloc(sizeof(float) * NFLOATS + 16); if (!ARENA) return -3;
-  memset(ARENA, 0, sizeof(float) * NFLOATS);
+  ARENA = xalloc(sizeof(int16_t) * NFLOATS + 16); if (!ARENA) return -3;
+  memset(ARENA, 0, sizeof(int16_t) * NFLOATS);
+  SCALE = xalloc(sizeof(float) * 2 * (size_t)NNODES + 16); if (!SCALE) return -3;
+  memset(SCALE, 0, sizeof(float) * 2 * (size_t)NNODES);
   TBLBOARD = xalloc(5 * (size_t)(NTBL + 1)); if (!TBLBOARD) return -4;
   for (int i = 0; i < 52 * 52; i++) TBLMAP[i] = -1; NTBL = 0;
   PASS = 1; NN = 1; NF = 0;
@@ -294,14 +296,26 @@ static void eval_show(const Node *n, int trav, const float *reach, float *out) {
   }
   SCR_TOP = mark;
 }
+static void decode_r(const int16_t *R16, float sc, size_t n, float *out) { float k = sc * (1.f / 32767.f); for (size_t i = 0; i < n; i++) out[i] = (float)R16[i] * k; }
+static void encode_r(const float *R, size_t n, int16_t *R16, float *sc) {
+  float m = 0; for (size_t i = 0; i < n; i++) { float a = R[i] < 0 ? -R[i] : R[i]; if (a > m) m = a; }
+  *sc = m; if (m <= 0) { for (size_t i = 0; i < n; i++) R16[i] = 0; return; }
+  float k = 32767.f / m; for (size_t i = 0; i < n; i++) { float x = R[i] * k; R16[i] = (int16_t)(x >= 0 ? x + .5f : x - .5f); }
+}
+static void encode_s(const float *S, size_t n, int16_t *S16, float *sc) { // non-negative, stored as uint16 bits
+  float m = 0; for (size_t i = 0; i < n; i++) if (S[i] > m) m = S[i];
+  *sc = m; uint16_t *u = (uint16_t *)S16; if (m <= 0) { for (size_t i = 0; i < n; i++) u[i] = 0; return; }
+  float k = 65535.f / m; for (size_t i = 0; i < n; i++) u[i] = (uint16_t)(S[i] * k + .5f);
+}
 static void regret_match(const float *R, int na, int H, float *sig) {
   for (int h = 0; h < H; h++) { float s = 0; for (int a = 0; a < na; a++) { float r = R[a * H + h]; if (r > 0) s += r; }
     if (s > 0) { float inv = 1 / s; for (int a = 0; a < na; a++) { float r = R[a * H + h]; sig[a * H + h] = r > 0 ? r * inv : 0; } }
     else { float u = 1.f / na; for (int a = 0; a < na; a++) sig[a * H + h] = u; } }
 }
-static void avg_strat(const float *S, int na, int H, float *sig) {
-  for (int h = 0; h < H; h++) { float s = 0; for (int a = 0; a < na; a++) s += S[a * H + h];
-    if (s > 0) { float inv = 1 / s; for (int a = 0; a < na; a++) sig[a * H + h] = S[a * H + h] * inv; }
+static void avg_strat(const int16_t *S16, int na, int H, float *sig) {
+  const uint16_t *S = (const uint16_t *)S16;
+  for (int h = 0; h < H; h++) { float s = 0; for (int a = 0; a < na; a++) s += (float)S[a * H + h];
+    if (s > 0) { float inv = 1 / s; for (int a = 0; a < na; a++) sig[a * H + h] = (float)S[a * H + h] * inv; }
     else { float u = 1.f / na; for (int a = 0; a < na; a++) sig[a * H + h] = u; } }
 }
 // mode 0: CFR update; 1: best response (traverser maximises, opponent average); 2: value of the average strategies
@@ -323,18 +337,23 @@ static void walk(int ni, int trav, const float *reach, float *out, int mode) {
     for (int h = 0; h < Ht; h++) out[h] *= f;
     SCR_TOP = mark; return;
   }
-  int na = n->nact, p = n->player, H = NH[p];
-  float *R = ARENA + n->data, *S = R + (size_t)na * H;
-  float *sig = scr((size_t)na * H);
-  if (mode == 0) regret_match(R, na, H, sig); else avg_strat(S, na, H, sig);
+  int na = n->nact, p = n->player, H = NH[p]; size_t nh = (size_t)na * H;
+  int16_t *R16 = ARENA + n->data, *S16 = R16 + nh; float *sc = SCALE + 2 * (size_t)ni;
+  float *sig = scr(nh), *Rf = 0;
+  if (mode == 0) { Rf = scr(nh); decode_r(R16, sc[0], nh, Rf); regret_match(Rf, na, H, sig); } else avg_strat(S16, na, H, sig);
   if (p == trav) {
-    float *cv = scr((size_t)na * H);
+    float *cv = scr(nh);
     for (int a = 0; a < na; a++) walk(n->child + a, trav, reach, cv + (size_t)a * H, mode);
     if (mode == 1) { for (int h = 0; h < H; h++) { float m = cv[h]; for (int a = 1; a < na; a++) if (cv[a * H + h] > m) m = cv[a * H + h]; out[h] = m; } }
     else { for (int h = 0; h < H; h++) { float v = 0; for (int a = 0; a < na; a++) v += sig[a * H + h] * cv[a * H + h]; out[h] = v; } }
-    if (mode == 0)
-      for (int a = 0; a < na; a++) { float *Ra = R + (size_t)a * H, *Sa = S + (size_t)a * H, *ca = cv + (size_t)a * H, *sa = sig + (size_t)a * H;
-        for (int h = 0; h < H; h++) { float r = Ra[h]; r *= r > 0 ? DPOS : DNEG; Ra[h] = r + ca[h] - out[h]; Sa[h] = Sa[h] * GAM + sa[h]; } }
+    if (mode == 0) {
+      for (int a = 0; a < na; a++) { float *Ra = Rf + (size_t)a * H, *ca = cv + (size_t)a * H;
+        for (int h = 0; h < H; h++) { float r = Ra[h]; r *= r > 0 ? DPOS : DNEG; Ra[h] = r + ca[h] - out[h]; } }
+      encode_r(Rf, nh, R16, &sc[0]);
+      // strategy sums: decode (reuse Rf), discount, add current strategy, encode
+      { const uint16_t *U = (const uint16_t *)S16; float k = sc[1] * (1.f / 65535.f) * GAM; for (size_t i = 0; i < nh; i++) Rf[i] = (float)U[i] * k + sig[i]; }
+      encode_s(Rf, nh, S16, &sc[1]);
+    }
   } else {
     float *r2 = scr(Ho), *tmp = scr(Ht);
     for (int h = 0; h < Ht; h++) out[h] = 0;
@@ -390,5 +409,15 @@ EXPORT("pf_strategy") float *pf_strategy(int i) {
   int na = n->nact, H = NH[n->player]; size_t need = (size_t)na * H;
   if (need > QCAP) { QBUF = xalloc(sizeof(float) * need); QCAP = need; }
   avg_strat(ARENA + n->data + (size_t)na * H, na, H, QBUF); return QBUF;
+}
+EXPORT("pf_reach_ptr") float *pf_reach_ptr(void) { if (!REACHBUF) REACHBUF = xalloc(sizeof(float) * 1330); return REACHBUF; }
+EXPORT("pf_values") float *pf_values(int ni, int trav) { // EV (BB, relative to the start of the solve) of each action for each hand of trav
+  const Node *n = &NODES[ni]; if (n->type != N_ACTION || n->player != trav) return 0;
+  int na = n->nact, H = NH[trav], o = 1 - trav; size_t need = (size_t)na * H;
+  if (need > VALCAP) { VALBUF = xalloc(sizeof(float) * need); VALCAP = need; }
+  float cs[52], tot; card_sums(REACHBUF, o, cs, &tot);
+  for (int a = 0; a < na; a++) { SCR_TOP = 0; float *tmp = scr(H); walk(n->child + a, trav, REACHBUF, tmp, 2);
+    for (int h = 0; h < H; h++) { int sm = SAME[trav][h]; float c = tot - cs[HC[trav][2 * h]] - cs[HC[trav][2 * h + 1]] + (sm >= 0 ? REACHBUF[sm] : 0); VALBUF[a * H + h] = c > 1e-9f ? tmp[h] / c : 0; } }
+  return VALBUF;
 }
 EXPORT("pf_eval7") uint32_t pf_eval7(int a, int b, int c, int d, int e, int f, int g) { uint8_t x[7] = {(uint8_t)a, (uint8_t)b, (uint8_t)c, (uint8_t)d, (uint8_t)e, (uint8_t)f, (uint8_t)g}; return eval7(x); }
