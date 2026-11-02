@@ -342,6 +342,14 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
 .pf-end { margin: 0; font-size: 15px; }
 .pfgrid .mcell { text-shadow: 0 0 2px rgba(0,0,0,.6); }
 .lv { display: grid; gap: 8px; margin-top: 6px; }
+.vtabs { position: absolute; inset: 0; pointer-events: none; }
+.vtab { position: absolute; border: 2px solid rgba(227, 181, 75, .85); border-radius: 6px; box-sizing: border-box; }
+.vtab span { position: absolute; left: 6px; top: 6px; background: rgba(227, 181, 75, .95); color: #241900; font: 700 14px/1 var(--font-body); padding: 3px 7px; border-radius: 999px; }
+.vtbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.vtcard { display: grid; gap: 4px; justify-items: start; text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 13px; cursor: pointer; min-width: 0; }
+.vtcard.on { outline: 2px solid var(--gold); }
+.vtcard.idle { cursor: default; }
+.vtcard .pcard { width: 22px; height: 29px; font-size: 12px; }
 .lv h3 { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; }
 .lv h3 .pcard { width: 26px; height: 34px; font-size: 13px; }
 .lv-acts { display: grid; gap: 6px; }
@@ -443,7 +451,7 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
   <section class="videorv" id="videoView" hidden aria-label="Video-Review">
     <div class="drop" id="vDrop">
       <b>Session-Video auswerten</b>
-      <span class="sub">Richte die Kamera auf den Fernseher, auf dem deine Aufnahme läuft, oder wähl die Videodatei direkt. Alles wird auf diesem Gerät ausgewertet, nichts wird hochgeladen. Die Seite erkennt Spin &amp; Gold und Rush &amp; Cash von selbst. Bei jeder deiner Preflop-Entscheidungen erscheinen GTO und Exploit. Bei Rush &amp; Cash wird die ganze Hand mitgeschrieben, und sobald der Flop fällt, rechnet der Solver die Hand im Hintergrund durch; danach stehen Flop, Turn und River mit GTO-Strategie und EV-Verlust deiner Aktion da. Bei der Kamera tippst du einmal die vier Ecken des Tisches an, damit das Bild entzerrt wird.</span>
+      <span class="sub">Richte die Kamera auf den Fernseher, auf dem deine Aufnahme läuft, oder wähl die Videodatei direkt. Alles wird auf diesem Gerät ausgewertet, nichts wird hochgeladen. Die Seite erkennt Spin &amp; Gold und Rush &amp; Cash von selbst, ebenso ob ein, zwei oder vier Tische im Bild sind; jeder Tisch wird getrennt ausgewertet. Bei jeder deiner Preflop-Entscheidungen erscheinen GTO und Exploit. Bei Rush &amp; Cash wird die ganze Hand mitgeschrieben, und sobald der Flop fällt, rechnet der Solver die Hand im Hintergrund durch; danach stehen Flop, Turn und River mit GTO-Strategie und EV-Verlust deiner Aktion da. Bei der Kamera tippst du einmal die vier Ecken des Tisches an, damit das Bild entzerrt wird.</span>
       <div class="row-btns">
         <button class="btn primary" type="button" id="vCamBtn">Kamera starten</button>
         <button class="btn" type="button" id="vPick">Video wählen</button>
@@ -456,9 +464,10 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
     </div>
     <div class="vr-main" id="vMain" hidden>
       <div class="vr-player">
-        <div class="vbox" id="vBox"><video id="vid" playsinline controls muted></video><div class="vsel" id="vSel" hidden></div><div class="vrect" id="vRect" hidden></div><svg class="vquad" id="vQuad" viewBox="0 0 100 100" preserveAspectRatio="none" hidden><polygon id="vQuadPoly" points=""></polygon></svg></div>
+        <div class="vbox" id="vBox"><video id="vid" playsinline controls muted></video><div class="vsel" id="vSel" hidden></div><div class="vrect" id="vRect" hidden></div><div class="vtabs" id="vTabs"></div><svg class="vquad" id="vQuad" viewBox="0 0 100 100" preserveAspectRatio="none" hidden><polygon id="vQuadPoly" points=""></polygon></svg></div>
         <div class="vctl">
           <label class="field" for="vMulti" id="vMultiWrap">Multiplikator<select id="vMulti"><option value="2">x2–x5</option><option value="10">x10</option><option value="50">x50 / x100</option><option value="jp">Jackpot</option></select></label>
+          <label class="field" for="vLayout">Tische im Bild<select id="vLayout"><option value="auto" selected>automatisch</option><option value="1">1 Tisch</option><option value="2h">2 nebeneinander</option><option value="2v">2 übereinander</option><option value="4">4 Tische (2 × 2)</option></select></label>
           <label class="field" for="vPfTree">Postflop-Solver<select id="vPfTree"><option value="normal" selected>normal (33/75 %)</option><option value="fast">schnell (33 %)</option><option value="wide">breit (+ Donk-Bet)</option><option value="off">aus</option></select></label>
           <label class="toggle"><input type="checkbox" id="vPause" checked> Bei jeder Entscheidung anhalten</label>
           <label class="toggle"><input type="checkbox" id="vLevels"> Kontrast ausgleichen</label>
@@ -468,6 +477,7 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
       </div>
       <div class="vr-panel" id="vPanel"><p class="muted">Starte das Video. Sobald du am Zug bist (Aktions-Buttons sichtbar), erscheint hier die Auswertung.</p></div>
     </div>
+    <div class="vtbar" id="vTabBar" hidden></div>
     <div class="tablewrap" id="vTimeWrap" hidden><table class="stable"><thead><tr><th>Zeit</th><th>Spot</th><th>Karten</th><th>Stacks BB</th><th>GTO</th><th>Exploit</th><th>Du</th><th>Urteil</th></tr></thead><tbody id="vBody"></tbody></table></div>
   </section>
 
@@ -1244,7 +1254,8 @@ const LR = (() => {
     // 1) stacks (blue)
     const blue = comps(im, mask(im, P.blue), 3).filter(c => c.h <= 70 && c.w <= 70);
     const stackLines = lines(blue).filter(l => l.some(g => g.h >= 8)).map(l => parseNum(im, l, P.blue)).filter(Boolean);
-    let seats = stackLines.filter(s => s.bb && s.nUnit >= 2 && s.nNum <= 6);
+    for (const s of stackLines) if (s.bb && s.val >= 1000 && !s.str.includes(".")) { s.val /= 10; s.str = String(s.val); }
+    let seats = stackLines.filter(s => s.bb && s.nUnit >= 1 && s.nNum <= 6 && s.nNum + (s.str.includes(".") ? 0 : 0) >= 1);
     const unit = seats.length >= 2 ? "bb" : "chips";
     if (unit === "chips") seats = stackLines.filter(s => s.nNum >= 2 && s.nNum <= 6);
     if (seats.length) { const mH = seats.map(s => s.H).sort((a, b) => a - b)[seats.length >> 1]; seats = seats.filter(s => s.H >= .72 * mH && s.H <= 1.45 * mH && s.conf >= .005); }
@@ -1253,6 +1264,7 @@ const LR = (() => {
     // 2) bets (white numbers with BB suffix, outside nameplates)
     const white = comps(im, mask(im, P.white), 3).filter(c => c.h <= 2.2 * dh && c.w <= 2.5 * dh);
     const betLines = lines(white).filter(l => l.some(g => g.h >= .45 * dh)).map(l => parseNum(im, l, P.white)).filter(b => b && (unit === "chips" || b.bb) && b.H <= 1.6 * dh);
+    if (unit === "bb") for (const b of betLines) if (b.val >= 1000 && !b.str.includes(".")) b.val /= 10;
     const yel = comps(im, mask(im, P.yellow), 30);
     const btnG = yel.filter(c => c.cy > .55 * im.h && c.h >= .7 * dh && c.h <= 2.4 * dh && c.n / (c.w * c.h) < .6);
     const zone = btnG.length >= 2 ? { x0: Math.min(...btnG.map(c => c.x0)) - 7 * dh, x1: Math.max(...btnG.map(c => c.x1)) + 2 * dh, y0: Math.min(...btnG.map(c => c.y0)) - 2.5 * dh, y1: Math.max(...btnG.map(c => c.y1)) + 2.5 * dh } : null;
@@ -1339,7 +1351,7 @@ const LR = (() => {
     const Cx = seats.reduce((a, s) => a + s.cx, 0) / seats.length, Cy = seats.reduce((a, s) => a + s.cy, 0) / seats.length;
     const out = {
       game: seats.length <= 3 ? "spin_gold" : "rush_cash", name: null, unit, sb: unit === "bb" ? .5 : null, bb: unit === "bb" ? 1 : null, multi: null, prize: null, buyin: null,
-      hero_cards: heroCards, buttons, board, board_cards: boardCards, pot,
+      hero_cards: heroCards, buttons, board, board_cards: boardCards, pot, hx: hs.cx / W, hy: hs.cy / im.h,
       seats: seats.map((s, i) => ({ ang: ((Math.atan2(s.cy - Cy, s.cx - Cx) * 180 / Math.PI) + 360) % 360, hero: i === hero, stack: s.val, bet: bets[i], dealer: i === dealer, cards: hasCards[i], label: "" })),
     };
     const issues = [];
@@ -2254,10 +2266,14 @@ renderSession();
 
 
 // ================= Video review (local file, frames read in the browser) =================
-const vr = { region: { x: 0, y: 0, w: 1, h: 1 }, spots: [], lastKey: null, pending: null, busy: false, timer: null, vtype: "rec", cur: null, url: null };
+const vr = { region: { x: 0, y: 0, w: 1, h: 1 }, spots: [], lastKey: null, pending: null, busy: false, timer: null, vtype: "rec", cur: null, url: null, tables: [], multi: false, curTable: 0, liveMsgs: [] };
 const vid = $("vid");
 const tFmt = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
-function vLive(text, hot) { const el = $("vLive"); el.textContent = text; el.classList.toggle("hot", !!hot); }
+function vLive(text, hot) {
+  const el = $("vLive");
+  if (vr.multi) { vr.liveMsgs[vr.curTable || 0] = text; vr.liveHot = vr.liveHot || []; vr.liveHot[vr.curTable || 0] = !!hot; text = vr.liveMsgs.map((m, i) => m ? `T${i + 1}: ${m}` : "").filter(Boolean).join(" · "); hot = vr.liveHot.some(Boolean); }
+  el.textContent = text; el.classList.toggle("hot", !!hot);
+}
 function sizeBox() {
   if (!vid.videoWidth) return;
   const ar = vid.videoWidth / vid.videoHeight; const box = $("vBox");
@@ -2276,7 +2292,7 @@ $("vInput").addEventListener("change", e => {
   stopStream(); vid.srcObject = null; vid.controls = true; vr.quad = null; drawQuad();
   if (vr.url) URL.revokeObjectURL(vr.url);
   vr.url = URL.createObjectURL(f); vid.src = vr.url;
-  vr.spots = []; vr.lastKey = null; vr.pending = null; vr.cur = null; ct.hand = null; vr.game = null;
+  vr.spots = []; vr.lastKey = null; vr.pending = null; vr.cur = null; ct.hand = null; vr.game = null; mtReset();
   $("vMain").hidden = false; $("vRegionBtn").disabled = false; $("vNowBtn").disabled = false; $("vCornerBtn").disabled = false; $("vDropNote").hidden = true;
   renderVPanel(null); renderTimeline(); vLive("Video geladen. Drück auf Play.");
 });
@@ -2304,7 +2320,7 @@ $("vCamBtn").addEventListener("click", async () => {
     stopStream(); if (vr.url) { URL.revokeObjectURL(vr.url); vr.url = null; }
     vr.stream = st; vr.cam = true; vid.removeAttribute("src"); vid.srcObject = st; vid.controls = false;
     $("vLevels").checked = true; $("vPause").checked = false;
-    vr.spots = []; vr.lastKey = null; vr.pending = null; vr.cur = null; ct.hand = null; vr.game = null; vr.region = { x: 0, y: 0, w: 1, h: 1 }; vr.quad = null; drawRect(); drawQuad();
+    vr.spots = []; vr.lastKey = null; vr.pending = null; vr.cur = null; ct.hand = null; vr.game = null; mtReset(); vr.region = { x: 0, y: 0, w: 1, h: 1 }; vr.quad = null; drawRect(); drawQuad();
     $("vMain").hidden = false; $("vRegionBtn").disabled = false; $("vNowBtn").disabled = false; $("vCornerBtn").disabled = false;
     renderVPanel(null); renderTimeline();
     await vid.play();
@@ -2392,7 +2408,8 @@ function handleRead(r, t, manual) {
   if (!r || !r.ok) { vLive(manual ? "Auf diesem Bild ist kein Tisch erkannt. Markier den Tischbereich." : "Kein Tisch erkannt"); return; }
   const raw = r.raw;
   // game switch with a little hysteresis, so one misread seat does not flip the mode
-  const g = raw.game === "rush_cash" ? "cash" : "spin";
+  vr.seatHist = (vr.seatHist || []).concat(raw.seats.length).slice(-12);
+  const g = raw.game === "rush_cash" || Math.max(...vr.seatHist) >= 4 ? "cash" : "spin";
   vr.gRun = vr.gLast === g ? (vr.gRun || 0) + 1 : 1; vr.gLast = g;
   const game = !vr.game || manual || vr.gRun >= 2 ? g : vr.game;
   if (game === "cash") { if (g === "cash") cashFrame(raw, t, manual); else vLive("Läuft"); return; }
@@ -2426,7 +2443,7 @@ async function tick(manual) {
   if (vr.busy || !vid.videoWidth) return;
   if (!manual && (vid.paused || vid.ended)) return;
   vr.busy = true;
-  try { await LR.ready(); if (vr.cam && !vr.t0) vr.t0 = performance.now(); const t = vr.cam ? (performance.now() - vr.t0) / 1000 : vid.currentTime; const r = LR.read(frameCanvas(), { loose: !!vr.cam || $("vLevels").checked }); handleRead(r, t, manual); }
+  try { await LR.ready(); if (vr.cam && !vr.t0) vr.t0 = performance.now(); const t = vr.cam ? (performance.now() - vr.t0) / 1000 : vid.currentTime; readFrameTables(frameCanvas(), t, manual, { loose: !!vr.cam || $("vLevels").checked }); }
   catch (e) { vLive("Bild konnte nicht gelesen werden"); }
   vr.busy = false;
 }
@@ -2456,7 +2473,7 @@ function renderVPanel(sp) {
   if (sp && sp.cash) return renderCashPanel(sp);
   if (!sp) { el.innerHTML = `<p class="muted">Starte das Video. Sobald du am Zug bist (Aktions-Buttons sichtbar), erscheint hier die Auswertung.</p>`; return; }
   const e = sp.ev, card = parseCards(sp.cards || "");
-  const head = `<div class="vp-head"><span class="vp-time">${tFmt(sp.t)}</span><span class="vp-spot">${e && e.s ? e.s.title : "Entscheidung"}</span></div>`;
+  const head = `<div class="vp-head"><span class="vp-time">${mtTag(sp)}${tFmt(sp.t)}</span><span class="vp-spot">${e && e.s ? e.s.title : "Entscheidung"}</span></div>`;
   if (!e || e.skip) { el.innerHTML = head + `<p>${e && e.skip ? e.skip : "Nicht bewertbar."}</p>`; return; }
   const vt = VTYPES.find(v => v.id === vr.vtype);
   const stk = e.x.map((v, i) => `${(e.x.length === 3 ? ["BTN", "SB", "BB"] : ["SB", "BB"])[i]} ${fmt(v.toFixed(1))}`).join(" · ");
@@ -2471,16 +2488,17 @@ function renderVPanel(sp) {
   el.querySelectorAll("[data-vact]").forEach(b => b.onclick = () => setAct(sp, b.dataset.vact));
 }
 function renderTimeline() {
+  mtBar();
   $("vTimeWrap").hidden = !vr.spots.length;
   const tb = $("vBody"); tb.replaceChildren();
   for (const sp of [...vr.spots].reverse()) {
     const e = sp.ev, tr = document.createElement("tr"); tr.className = "clickrow"; tr.tabIndex = 0;
     if (sp.cash) cashTimelineRow(sp, tr);
-    else if (!e || e.skip) tr.innerHTML = `<td class="mono">${tFmt(sp.t)}</td><td colspan="7" class="muted">${e && e.skip ? e.skip : "nicht bewertet"}</td>`;
+    else if (!e || e.skip) tr.innerHTML = `<td class="mono">${mtTag(sp)}${tFmt(sp.t)}</td><td colspan="7" class="muted">${e && e.skip ? e.skip : "nicht bewertet"}</td>`;
     else {
       const card = parseCards(sp.cards || ""), v = verdictOf(sp);
       const res = !sp.act ? `<span class="muted">offen</span>` : v.cls === "good" ? `<span class="okp">richtig</span>` : `<span class="loss">${evText(Math.max(e.costN || 0, 0), e.unit).replace("+", "−")}</span>`;
-      tr.innerHTML = `<td class="mono">${tFmt(sp.t)}</td><td>${e.s.title}</td><td><span class="cardsview">${card ? cardsHtml(card.cs) : ""}</span></td><td class="mono">${e.x.map(v => fmt(v.toFixed(1))).join(" / ")}</td><td>${ACTL[e.gtoAct]}</td><td>${ACTL[e.exAct]}</td><td>${sp.act ? ACTL[sp.act] : "—"}</td><td>${res}</td>`;
+      tr.innerHTML = `<td class="mono">${mtTag(sp)}${tFmt(sp.t)}</td><td>${e.s.title}</td><td><span class="cardsview">${card ? cardsHtml(card.cs) : ""}</span></td><td class="mono">${e.x.map(v => fmt(v.toFixed(1))).join(" / ")}</td><td>${ACTL[e.gtoAct]}</td><td>${ACTL[e.exAct]}</td><td>${sp.act ? ACTL[sp.act] : "—"}</td><td>${res}</td>`;
     }
     const go = () => { vr.cur = sp; renderVPanel(sp); if (!vr.cam) { try { vid.currentTime = Math.max(0, sp.t - 1.5); } catch (er) {} } };
     tr.onclick = go; tr.onkeydown = ev => { if (ev.key === "Enter") go(); };
@@ -3151,7 +3169,8 @@ function cashFrame(raw, t, manual) {
   if (cards && (!H || H.cards !== cards)) {
     if (!S) { vLive("6-max-Tisch: Dealer-Button nicht erkannt"); return; }
     ct.cand = ct.cand && ct.cand.cards === cards ? { cards, n: ct.cand.n + 1 } : { cards, n: 1 };
-    if (!H || ct.cand.n >= 2 || manual || raw.buttons) { const had = H && vr.spots.length; ctFinish(H); H = ct.hand = ctNewHand(S, cards, t); ct.cand = null; if (had !== vr.spots.length) renderTimeline(); }
+    const full = S.n >= Math.max(4, ...(vr.seatHist || [0])); // wait for a frame that shows every seat, else positions would be wrong
+    if ((full && (!H || ct.cand.n >= 2 || manual || raw.buttons)) || ct.cand.n >= 5) { const had = H && vr.spots.length; ctFinish(H); H = ct.hand = ctNewHand(S, cards, t); ct.cand = null; if (had !== vr.spots.length) renderTimeline(); }
   }
   if (!H) { vLive("Rush & Cash erkannt · warte auf deine Karten"); return; }
   if (H.done) { vLive("Warte auf die nächste Hand"); return; }
@@ -3197,7 +3216,7 @@ function cashFrame(raw, t, manual) {
         d.post = { pot: ctPot(H), toCall: d.toCall, board: st.board.slice() };
         d.snap = H.streets.slice(1, H.street + 1).map(x => ({ acts: x.acts.map(a => Object.assign({}, a)), board: x.board.slice() }));
         if (!H.lvJob) lvStart(H);
-        if (H.lvJob && H.lvJob.status === "ready") lvEval(H, d).then(() => lvRefresh(H));
+        lvNeed(H, d);
       }
       H.decs.push(d); H.dec = d; H.heroActed = true;
       const sp = { cash: true, t, H, d }; vr.spots.push(sp); vr.cur = sp;
@@ -3466,8 +3485,9 @@ async function pfSolve(opts) {
   const sp = pfs.custom || pfs.spot;
   const cfg = pfConfig({ oopR: sp.oopR || sp.oop(), ipR: sp.ipR || sp.ip(), board, pot, stack, sizes: pfReadSizes() });
   const target = parseFloat($("pfAcc").value), maxIter = board.length === 3 ? 400 : 1000;
-  if (lv.job && lv.job.status === "solving") { PF.stop(); await lv.job.done; }
-  if (lv.job) lv.job.status = "replaced";
+  if (lv.running) { const r = lv.running; PF.stop(); try { await r.done; } catch (e) {} }
+  if (lv.resident) { lv.resident.status = "evicted"; lv.resident = null; }
+  pfs.liveJob = null;
   pfs.busy = true; $("pfSolve").disabled = true; $("pfStop").hidden = false; $("pfResult").hidden = true;
   pfStatus("busy", "Baue den Spielbaum …");
   try {
@@ -3486,7 +3506,7 @@ async function pfSolve(opts) {
     if (opts && opts.then) opts.then();
   } catch (e) {
     pfStatus("err", e && e.msg ? e.msg : e && e.error === "mem" ? "Zu wenig Speicher für diesen Baum." : `Fehler beim Rechnen${e && e.message ? ": " + e.message : ""}.`);
-  } finally { pfs.busy = false; $("pfSolve").disabled = false; $("pfStop").hidden = true; }
+  } finally { pfs.busy = false; $("pfSolve").disabled = false; $("pfStop").hidden = true; if (!vid.paused) lvPump(); }
 }
 async function pfOpenResult(sp, board) {
   const hs = await PF.call({ cmd: "hands" });
@@ -3644,12 +3664,13 @@ function pfOpenFromHand(o) {
 const LV_TREES = { fast: { A: "33", Cip: "", Coop: "" }, normal: { A: "33, 75", Cip: "33", Coop: "" }, wide: { A: "33, 75", Cip: "33", Coop: "33" } };
 // flop sizes depend on who raised last preflop: the aggressor gets the bet sizes, the caller only a stab (IP) or a donk bet (tree "breit")
 function pfFlopSizes(tree, aggrOop) { const t = LV_TREES[tree] || LV_TREES.normal; return [{ oop: aggrOop ? t.A : t.Coop, ip: aggrOop ? t.Cip : t.A, raise: "3", max: 2 }, { oop: "66", ip: "66", raise: "", max: 1 }, { oop: "75", ip: "75", raise: "", max: 1 }]; }
-const lv = { job: null, tree: "normal" };
+const lv = { tree: "normal", queue: [], running: null, resident: null };
 function lvStatusText(job) {
   if (!job) return "";
   if (job.status === "skip") return job.msg;
-  if (job.status === "wait") return "Solver wartet …";
-  if (job.status === "solving") return `Solver rechnet diesen Flop … ${job.iter ? `Iteration ${job.iter}, Abweichung ${fmt(job.expl.toFixed(1))} % · ` : ""}${fmt(Math.round((performance.now() - job.t0) / 1000))} s`;
+  if (job.status === "wait") { const k = lv.queue.indexOf(job); return `Solver: in der Warteschlange${k >= 0 && (lv.queue.length > 1 || lv.running) ? ` (Platz ${k + 1 + (lv.running ? 1 : 0)})` : ""} …`; }
+  if (job.status === "solving") return `Solver rechnet diesen Flop … ${job.iter ? `Iteration ${job.iter}, Abweichung ${fmt(job.expl.toFixed(1))} % · ` : ""}${fmt(Math.round((performance.now() - job.t0s) / 1000))} s`;
+  if (job.status === "evicted") return "Der Baum dieser Hand wurde für einen anderen Tisch freigemacht und wird bei Bedarf neu gerechnet.";
   if (job.status === "ready") return `Solver fertig in ${fmt(Math.round(job.ms / 1000))} s (Abweichung ${fmt(job.expl.toFixed(2))} % vom Pot).`;
   if (job.status === "replaced") return "Die Lösung dieser Hand wurde durch eine neuere ersetzt.";
   return job.msg || "Solver nicht verfügbar.";
@@ -3671,26 +3692,44 @@ function lvStart(H) {
   const cfg = pfConfig({ oopR: R[job.oopPos], ipR: R[job.ipPos], board: board.map(pfCard), pot: H.streets[1].pot, stack: Math.max(1, stack), sizes: pfFlopSizes(lv.tree, aggr === job.oopPos) });
   if (cfg.board.some(c => c < 0)) { job.status = "skip"; job.msg = "Flop nicht sicher erkannt."; return; }
   job.cfg = cfg; job.board = board;
-  const prev = lv.job; lv.job = job;
+  lv.queue.push(job); lvRefresh(H); lvPump();
+}
+// one solver tree fits in memory: jobs run one after another, tables with an open decision first
+function lvPump() {
+  if (lv.running || pfs.busy) return;
+  lv.queue = lv.queue.filter(j => j.status === "wait");
+  if (!lv.queue.length) return;
+  const open = j => j.H.decs.some(d => d.street > 0 && !d.sol) ? 1 : 0;
+  lv.queue.sort((x, y) => (open(y) - open(x)) || (x.t0 - y.t0));
+  lvRun(lv.queue.shift());
+}
+function lvRun(job) {
+  const H = job.H; lv.running = job;
+  if (lv.resident && lv.resident !== job && lv.resident.status === "ready") lv.resident.status = "evicted";
+  lv.resident = null;
+  if (pfs.result && !$("pfResult").hidden) { pfs.liveJob = null; pfs.result = null; $("pfResult").hidden = true; pfStatus("ok", "Die Lösung hier wurde für die Live-Auswertung im Video-Review freigemacht. Tippe auf „Lösen“, um sie neu zu rechnen."); }
   job.done = (async () => {
-    if (prev && prev.status === "solving") { PF.stop(); try { await prev.done; } catch (e) {} }
-    if (prev && prev.status === "ready") prev.status = "replaced";
-    if (lv.job !== job) { job.status = "replaced"; return; }
-    if (pfs.busy) { job.status = "skip"; job.msg = "Der Solver ist gerade mit einem anderen Spot beschäftigt."; return; }
-    job.status = "solving"; job.t0 = performance.now(); lvRefresh(H);
+    job.status = "solving"; job.t0s = performance.now(); job.iter = 0; lvRefresh(H);
     try {
-      const su = await PF.call({ cmd: "setup", cfg, maxBytes: 1.6e9 });
-      if (!su.ok) { job.status = "failed"; job.msg = `Postflop: zu wenig Speicher (${fmt(Math.round(su.bytes / 1e6))} MB). Stell den Baum auf „schnell“.`; lvRefresh(H); return; }
+      const su = await PF.call({ cmd: "setup", cfg: job.cfg, maxBytes: 1.6e9 });
+      if (!su.ok) { job.status = "failed"; job.msg = `Postflop: zu wenig Speicher (${fmt(Math.round(su.bytes / 1e6))} MB). Stell den Baum auf „schnell“.`; return; }
       const res = await PF.call({ cmd: "run", maxIter: 120, target: 1, every: 10 }, pr => { job.iter = pr.iter; job.expl = pr.expl; if (performance.now() - (job.lastPaint || 0) > 900) { job.lastPaint = performance.now(); lvRefresh(H); } });
-      if (lv.job !== job) { job.status = "replaced"; return; }
+      if (res.stopped) { job.status = "wait"; lv.queue.push(job); return; }
       job.ms = res.ms; job.expl = res.expl; job.iter = res.iter;
-      const hs = await PF.call({ cmd: "hands" });
-      job.hands = { h: hs.h, w: hs.w, cls: hs.h.map(arr => { const o = new Int16Array(arr.length / 2); for (let i = 0; i < o.length; i++) o[i] = pfClassOf(arr[2 * i], arr[2 * i + 1]); return o; }) };
-      job.status = "ready";
-      for (const d of H.decs) if (d.street > 0) await lvEval(H, d);
-      lvRefresh(H);
-    } catch (e) { if (job.status === "solving") { job.status = "failed"; job.msg = e && e.error === "mem" ? "Postflop: zu wenig Speicher." : "Postflop: Solver-Fehler."; } lvRefresh(H); }
+      if (!job.hands) { const hs = await PF.call({ cmd: "hands" });
+        job.hands = { h: hs.h, w: hs.w, cls: hs.h.map(arr => { const o = new Int16Array(arr.length / 2); for (let i = 0; i < o.length; i++) o[i] = pfClassOf(arr[2 * i], arr[2 * i + 1]); return o; }) }; }
+      job.status = "ready"; lv.resident = job; job.solves = (job.solves || 0) + 1;
+      for (const d of H.decs) if (d.street > 0 && !d.sol) await lvEval(H, d);
+    } catch (e) { if (job.status === "solving") { job.status = "failed"; job.msg = e && e.error === "mem" ? "Postflop: zu wenig Speicher." : "Postflop: Solver-Fehler."; } }
+    finally { if (lv.running === job) lv.running = null; lvRefresh(H); lvPump(); }
   })();
+}
+// a decision needs the tree of its hand
+function lvNeed(H, d) {
+  const job = H.lvJob; if (!job) return;
+  if (job.status === "ready" && lv.resident === job && !lv.running) lvEval(H, d).then(() => lvRefresh(H));
+  else if (job.status === "evicted") { job.status = "wait"; lv.queue.push(job); lvPump(); }
+  else lvPump();
 }
 function lvRefresh(H) { if (vr.cur && vr.cur.cash && vr.cur.H === H) renderVPanel(vr.cur); renderTimeline(); }
 const lvNode = async (job, id) => { if (!job.cache.has(id)) job.cache.set(id, await PF.call({ cmd: "node", node: id })); return job.cache.get(id); };
@@ -3734,7 +3773,7 @@ async function lvPath(job, snap, upto) { // follow the tracked line through the 
   return { node, reach, notes, steps };
 }
 async function lvEval(H, d) {
-  const job = H.lvJob; if (!job || job.status !== "ready" || !d.snap) return;
+  const job = H.lvJob; if (!job || job.status !== "ready" || lv.resident !== job || lv.running || !d.snap) return;
   const saveNames = pfs.names; pfs.names = [job.oopPos, job.ipPos];
   try {
     const path = await lvPath(job, d.snap);
@@ -3790,6 +3829,8 @@ function lvBlockHtml(H, d) {
 }
 function lvOpenInSolver(H, d) {
   const job = H.lvJob, s = d.sol; if (!job || job.status !== "ready" || !s || s.fail) return;
+  if (lv.resident !== job || lv.running) { lvNeed(H, d); return; }
+  pfs.liveJob = job;
   pfs.result = { cfg: job.cfg, sp: { oopPos: job.oopPos, ipPos: job.ipPos }, board: job.cfg.board };
   pfs.hands = job.hands; pfs.cache = job.cache; pfs.names = [job.oopPos, job.ipPos];
   pfs.stack = s.steps.map(x => ({ node: x.node, reach: x.reach, label: x.label }));
@@ -3800,6 +3841,87 @@ function lvOpenInSolver(H, d) {
 }
 pfInitView();
 $("vPfTree").addEventListener("change", e => { lv.tree = e.target.value; });
+
+// ================= Several tables in one video (e.g. a 4-table screen recording) =================
+const MT_LAYOUTS = { "1": [[0, 0, 1, 1]], "2h": [[0, 0, .5, 1], [.5, 0, .5, 1]], "2v": [[0, 0, 1, .5], [0, .5, 1, .5]], "4": [[0, 0, .5, .5], [.5, 0, .5, .5], [0, .5, .5, .5], [.5, .5, .5, .5]] };
+const mt = { mode: "auto", layout: "1", checkedAt: -1e9, misses: 0, canv: [] };
+function mtCrop(src, k, i) {
+  const [x, y, w, h] = MT_LAYOUTS[k][i], c = mt.canv[i] || (mt.canv[i] = document.createElement("canvas"));
+  const sw = Math.max(1, Math.round(w * src.width)), sh = Math.max(1, Math.round(h * src.height));
+  c.width = sw; c.height = sh; c.getContext("2d", { willReadFrequently: true }).drawImage(src, Math.round(x * src.width), Math.round(y * src.height), sw, sh, 0, 0, sw, sh);
+  return c;
+}
+// a region holds a whole table: at least 3 seats, a dealer button and the hero at the bottom
+function mtValid(r) { return !!(r && r.ok && r.raw && r.raw.seats.length >= 3 && r.raw.seats.some(s => s.dealer) && r.raw.hy > .5 && r.raw.hx > .12 && r.raw.hx < .88); }
+function mtReadAll(fc, k, opts) { const n = MT_LAYOUTS[k].length; return MT_LAYOUTS[k].map((_, i) => n === 1 ? LR.read(fc, opts) : LR.read(mtCrop(fc, k, i), opts)); }
+function mtDetect(fc, opts) {
+  let best = null, bestScore = -1e9;
+  for (const k of ["4", "2h", "2v", "1"]) {
+    const rs = mtReadAll(fc, k, opts), n = rs.filter(mtValid).length, score = n * 10 - MT_LAYOUTS[k].length;
+    if (n > 0 && score > bestScore) { bestScore = score; best = { layout: k, reads: rs }; }
+  }
+  return best;
+}
+function mtTableState(i) { return vr.tables[i] || (vr.tables[i] = { pending: null, lastKey: null, gRun: 0, gLast: null, game: null, seatHist: [], hand: null, cand: null }); }
+function mtRun(i, fn) { // run the single-table logic with table i's own state
+  const T = mtTableState(i), keys = ["pending", "lastKey", "gRun", "gLast", "game", "seatHist"], n0 = vr.spots.length;
+  for (const k of keys) vr[k] = T[k]; ct.hand = T.hand; ct.cand = T.cand; vr.curTable = i;
+  try { fn(); }
+  finally {
+    for (const k of keys) T[k] = vr[k]; T.hand = ct.hand; T.cand = ct.cand;
+    let added = false; for (let j = n0; j < vr.spots.length; j++) if (vr.spots[j].table == null) { vr.spots[j].table = i; added = true; }
+    if (T.hand && T.hand.table == null) T.hand.table = i;
+    if (added) { renderTimeline(); if (vr.cur && vr.cur.table === i) renderVPanel(vr.cur); }
+  }
+}
+function mtReset() { vr.tables = []; vr.multi = false; vr.liveMsgs = []; mt.layout = mt.mode === "auto" ? "1" : mt.mode; mt.checkedAt = -1e9; mt.misses = 0; mtOverlay(); }
+function readFrameTables(fc, t, manual, opts) {
+  let reads = null; const now = performance.now();
+  if (mt.mode === "auto") {
+    if (now - mt.checkedAt > 20000 || mt.misses >= 4 || manual) {
+      const d = mtDetect(fc, opts); mt.checkedAt = now; mt.misses = 0;
+      if (d) { if (d.layout !== mt.layout) { mt.layout = d.layout; vr.tables = []; mtOverlay(); } reads = d.reads; }
+    }
+  } else if (mt.layout !== mt.mode) { mt.layout = mt.mode; vr.tables = []; mtOverlay(); }
+  const k = mt.layout; vr.multi = MT_LAYOUTS[k].length > 1;
+  if (!reads) reads = mtReadAll(fc, k, opts);
+  let valid = 0;
+  reads.forEach((r, i) => { if (mtValid(r)) valid++; mtRun(i, () => handleRead(r, t, manual)); });
+  mt.misses = valid ? 0 : mt.misses + 1;
+  vr.curTable = 0;
+}
+function mtOverlay() {
+  const box = $("vTabs"); if (!box) return;
+  const k = mt.layout, R = vr.region;
+  if (MT_LAYOUTS[k].length < 2 || vr.quad) { box.innerHTML = ""; return; }
+  box.innerHTML = MT_LAYOUTS[k].map(([x, y, w, h], i) => `<div class="vtab" style="left:${(R.x + x * R.w) * 100}%;top:${(R.y + y * R.h) * 100}%;width:${w * R.w * 100}%;height:${h * R.h * 100}%"><span>${i + 1}</span></div>`).join("");
+}
+function mtTag(sp) { return vr.multi && sp && sp.table != null ? `T${sp.table + 1} · ` : ""; }
+function mtVerdict(sp) {
+  if (sp.cash) { const d = sp.d;
+    if (d.street > 0) { const s = d.sol; return !s || !s.verdict ? null : s.verdict === "good" ? ["okp", "richtig"] : s.verdict === "close" ? ["warnp", "knapp"] : ["loss", `−${pfFmt(s.loss)} BB`]; }
+    const r = d.res; if (!r || r.skip || !d.act) return null;
+    return r.verdict === "good" || r.verdict === "exploit" ? ["okp", r.verdict === "good" ? "richtig" : "Exploit"] : r.verdict === "bad" ? ["loss", "Fehler"] : ["warnp", r.verdict === "gto" ? "Exploit verpasst" : "knapp"]; }
+  const v = verdictOf(sp); return !v ? null : v.cls === "good" ? ["okp", "richtig"] : v.cls === "bad" ? ["loss", "Fehler"] : ["warnp", "knapp"];
+}
+function mtBar() {
+  const el = $("vTabBar"); if (!el) return;
+  const n = MT_LAYOUTS[mt.layout].length;
+  if (!vr.multi || n < 2) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  let h = "";
+  for (let i = 0; i < n; i++) {
+    let sp = null; for (let j = vr.spots.length - 1; j >= 0; j--) if (vr.spots[j].table === i) { sp = vr.spots[j]; break; }
+    if (!sp) { h += `<div class="vtcard idle"><b>Tisch ${i + 1}</b><span class="muted">noch keine Entscheidung</span></div>`; continue; }
+    const cards = sp.cash ? sp.H.cards : sp.cards, cp = parseCards(cards || ""), v = mtVerdict(sp);
+    const what = sp.cash ? (sp.d.street > 0 ? `${STREETS[sp.d.street]}${sp.d.sol && !sp.d.sol.fail && sp.d.sol.best >= 0 ? ` · GTO ${sp.d.sol.items[sp.d.sol.best].label}` : ""}` : (sp.d.res && sp.d.res.sp ? sp.d.res.sp.title : "Preflop")) : (sp.ev && sp.ev.s ? sp.ev.s.title : "Entscheidung");
+    h += `<button type="button" class="vtcard${vr.cur === sp ? " on" : ""}" data-vtc="${vr.spots.indexOf(sp)}"><b>Tisch ${i + 1}</b><span class="cardsview">${cp ? cardsHtml(cp.cs) : ""}</span><span>${what}</span>${v ? `<span class="${v[0]}">${v[1]}</span>` : `<span class="muted">offen</span>`}</button>`;
+  }
+  el.innerHTML = h;
+  el.querySelectorAll("[data-vtc]").forEach(b => b.onclick = () => { const sp = vr.spots[+b.dataset.vtc]; vr.cur = sp; renderVPanel(sp); mtBar(); });
+}
+$("vLayout").addEventListener("change", e => { mt.mode = e.target.value; mtReset(); });
+vid.addEventListener("seeked", () => { vr.tables = []; mt.checkedAt = -1e9; });
 
 setExample();
 renderReview();
