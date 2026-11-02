@@ -60,7 +60,7 @@ fi
 if pgrep -x pflib > /dev/null; then echo "Läuft schon ($(pgrep -xc pflib) Rechnungen). Stand: sh pi-rechnen.sh status"; exit 0; fi
 if [ -n "$1" ]; then N=$1; else
   avail=$(awk '/MemAvailable/ { print int($2 / 1024) }' /proc/meminfo); cores=$(nproc)
-  N=$(( (avail - 800) / 650 )); [ "$N" -gt "$cores" ] && N=$cores; [ "$N" -gt 4 ] && N=4; [ "$N" -lt 1 ] && N=1
+  N=$(( (avail - 500) / 600 )); [ "$N" -gt "$cores" ] && N=$cores; [ "$N" -gt 4 ] && N=4; [ "$N" -lt 1 ] && N=1
   echo "Freier RAM: $avail MB, also $N parallele Rechnungen."
 fi
 [ -f pi-auftrag.txt ] || { echo "pi-auftrag.txt fehlt in $(pwd)"; exit 1; }
