@@ -6,14 +6,14 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="S&amp;G Review">
+<meta name="apple-mobile-web-app-title" content="Poker Review">
 <meta name="theme-color" content="#0e1412">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
-<title>Spin &amp; Gold Ranges</title>
+<title>Poker Session Review</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -277,13 +277,44 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
 .vp-verdict b { font-family: var(--font-display); font-size: 24px; }
 .vp-verdict.good { background: var(--ok-soft); } .vp-verdict.bad { background: var(--bad-soft); } .vp-verdict.mixed { background: var(--warn-soft); }
 .linkbtn { border: 0; background: none; padding: 0; color: var(--gold); text-decoration: underline; font: inherit; cursor: pointer; }
+
+/* ---- Rush & Cash ---- */
+.gameseg { margin-bottom: 16px; }
+.gameseg .btn { font-family: var(--font-display); font-weight: 700; font-size: 19px; padding: 6px 16px; }
+.cgrid { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 2px; }
+.cgrid .mcell { font-size: clamp(7.5px, 1.5vw, 12.5px); border-radius: 3px; }
+.clegend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); margin-top: 8px; grid-column: 1 / -1; }
+.clegend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.cnote { margin: 0; font-size: 13.5px; color: var(--muted); }
+.cline { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--surface); }
+.cl-street { display: grid; gap: 4px; }
+.cl-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 14px; }
+.cl-head .pcard { width: 26px; height: 34px; font-size: 13.5px; }
+.cl-acts { display: flex; flex-wrap: wrap; gap: 5px; }
+.ca { font-size: 13px; padding: 2px 8px; border-radius: 999px; background: var(--cell); color: var(--ink); font-variant-numeric: tabular-nums; }
+.ca.fold { color: var(--muted); background: transparent; border: 1px dashed var(--line); }
+.ca.hero { background: var(--gold-soft); font-weight: 600; outline: 1px solid var(--gold); }
+.ca.est { font-style: italic; }
+.crow { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.crow .field { max-width: 220px; }
+.cashshot { display: grid; gap: 14px; }
+.cashshot .row { display: grid; gap: 6px; }
+.cdetail td { background: var(--bg); }
+.cdet { display: grid; gap: 12px; padding: 6px 0; }
+.cminis { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.warnp { color: var(--warn); font-weight: 600; }
+.vp-line .decision.dlong, .decision.dlong { font-size: clamp(26px, 3.4vw, 34px); }
+.cash-h { font-family: var(--font-display); font-size: 30px; margin: 10px 0 0; }
+.nots { display: grid; gap: 4px 10px; grid-template-columns: max-content minmax(0, 1fr); font-size: 13.5px; margin-top: 8px; }
+.nots .mono { word-break: break-word; }
+@media (max-width: 520px) { .nots { grid-template-columns: minmax(0, 1fr); } .cminis { grid-template-columns: minmax(0, 1fr); } }
 </style>
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">GGPoker · Spin &amp; Gold 3-max</div>
-    <h1>Spin <span class="amp">&amp;</span> Gold Ranges</h1>
-    <p class="lede">Spiel dein Session-Video ab, und die Seite zeigt bei jeder deiner Entscheidungen sofort die GTO-Linie und die Exploit-Linie gegen deinen Gegnertyp. Einzelne Screenshots und GG-Handhistorien gehen auch. Dahinter stehen Push/Fold-Gleichgewichte für jede Stackverteilung von 2 bis 25 BB, mit ChipEV für x2–x5 und ICM für x10, x50/x100 und den Jackpot.</p>
+    <div class="eyebrow">GGPoker · Spin &amp; Gold 3-max · Rush &amp; Cash 6-max</div>
+    <h1>Session <span class="amp">Review</span></h1>
+    <p class="lede">Spiel dein Session-Video ab, und die Seite zeigt bei jeder deiner Entscheidungen sofort die GTO-Linie und die Exploit-Linie gegen deinen Gegnertyp. Spin &amp; Gold bewertet sie mit Push/Fold-Gleichgewichten von 2 bis 25 BB (ChipEV und ICM), Rush &amp; Cash preflop mit 6-max-Referenz-Ranges für 100 BB; dazu schreibt die Seite die Line bis zum River mit. Einzelne Screenshots und GG-Handhistorien gehen auch.</p>
   </header>
 
   <nav class="views" id="views" aria-label="Ansicht">
@@ -349,6 +380,7 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
     </div>
 
     <div class="rv-right" id="rvRight">
+      <div class="cashshot" id="cashShot" hidden></div>
       <div class="rv-summary" id="rvSummary"></div>
       <div class="unsupported" id="rvUnsupported" hidden></div>
       <div class="lines" id="rvLines">
@@ -367,7 +399,7 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
   <section class="videorv" id="videoView" hidden aria-label="Video-Review">
     <div class="drop" id="vDrop">
       <b>Session-Video auswerten</b>
-      <span class="sub">Richte die Kamera auf den Fernseher, auf dem deine Aufnahme läuft, oder wähl die Videodatei direkt. Alles wird auf diesem Gerät ausgewertet, nichts wird hochgeladen. Bei jeder deiner Preflop-Entscheidungen erscheinen GTO und Exploit. Bei der Kamera tippst du einmal die vier Ecken des Tisches an, damit das Bild entzerrt wird.</span>
+      <span class="sub">Richte die Kamera auf den Fernseher, auf dem deine Aufnahme läuft, oder wähl die Videodatei direkt. Alles wird auf diesem Gerät ausgewertet, nichts wird hochgeladen. Die Seite erkennt Spin &amp; Gold und Rush &amp; Cash von selbst. Bei jeder deiner Preflop-Entscheidungen erscheinen GTO und Exploit; bei Rush &amp; Cash wird außerdem die ganze Hand bis zum River mitgeschrieben. Bei der Kamera tippst du einmal die vier Ecken des Tisches an, damit das Bild entzerrt wird.</span>
       <div class="row-btns">
         <button class="btn primary" type="button" id="vCamBtn">Kamera starten</button>
         <button class="btn" type="button" id="vPick">Video wählen</button>
@@ -382,7 +414,7 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
       <div class="vr-player">
         <div class="vbox" id="vBox"><video id="vid" playsinline controls muted></video><div class="vsel" id="vSel" hidden></div><div class="vrect" id="vRect" hidden></div><svg class="vquad" id="vQuad" viewBox="0 0 100 100" preserveAspectRatio="none" hidden><polygon id="vQuadPoly" points=""></polygon></svg></div>
         <div class="vctl">
-          <label class="field" for="vMulti">Multiplikator<select id="vMulti"><option value="2">x2–x5</option><option value="10">x10</option><option value="50">x50 / x100</option><option value="jp">Jackpot</option></select></label>
+          <label class="field" for="vMulti" id="vMultiWrap">Multiplikator<select id="vMulti"><option value="2">x2–x5</option><option value="10">x10</option><option value="50">x50 / x100</option><option value="jp">Jackpot</option></select></label>
           <label class="toggle"><input type="checkbox" id="vPause" checked> Bei jeder Entscheidung anhalten</label>
           <label class="toggle"><input type="checkbox" id="vLevels"> Kontrast ausgleichen</label>
           <span class="vlive" id="vLive" role="status">Bereit</span>
@@ -397,7 +429,7 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
   <section class="session" id="sessionView" hidden aria-label="Session-Review">
     <div class="drop" id="sDrop">
       <b>Ganze Session auswerten</b>
-      <span class="sub">Lade die Handhistorie aus PokerCraft (Spin&amp;Gold-Tab, Turniere auswählen, Herunterladen) als .txt oder .zip. Du kannst auch viele Screenshots auf einmal wählen. Die Seite bewertet jede Push/Fold-Entscheidung und sortiert deine Fehler nach EV-Verlust.</span>
+      <span class="sub">Lade die Handhistorie aus PokerCraft als .txt oder .zip: für Spin &amp; Gold aus dem Spin&amp;Gold-Tab, für Rush &amp; Cash aus dem Cash-Bereich (Hände auswählen, Herunterladen). Du kannst auch viele Screenshots auf einmal wählen. Spin &amp; Gold: jede Push/Fold-Entscheidung, sortiert nach EV-Verlust. Rush &amp; Cash: jede Preflop-Entscheidung gegen die Referenz, mit Leak-Übersicht und der ganzen Line.</span>
       <div class="row-btns"><button class="btn primary" type="button" id="sPick">Dateien wählen</button><button class="btn" type="button" id="sClear">Liste leeren</button></div>
       <input type="file" id="sInput" multiple accept=".txt,.zip,text/plain,application/zip,image/png,image/jpeg,image/webp" hidden>
     </div>
@@ -414,9 +446,48 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
       <div class="tablewrap"><table class="stable"><thead><tr><th>Zeit</th><th>Spot</th><th>Karten</th><th>Stacks BB</th><th>Du</th><th>GTO</th><th>Verlust</th><th>Exploit</th></tr></thead><tbody id="sBody"></tbody></table></div>
       <p class="fine">Klick auf eine Hand öffnet sie im Hand-Review. Verlust ist der EV-Unterschied zur besten Aktion. Die Buy-in-Summe rechnet ChipEV-Spots über deinen Chipanteil in Preisgeld um. Bewertet werden Push/Fold-Spots und Reshoves; Limps, Minraises und Postflop nicht.</p>
     </div>
+    <div id="cResults" class="sres" hidden>
+      <h2 class="cash-h">Rush &amp; Cash</h2>
+      <div class="scontrols">
+        <div class="row"><h3>Exploit gegen</h3><div class="vtype" id="cVt"></div></div>
+        <div class="srow"><label class="toggle"><input type="checkbox" id="cOnlyErr" checked> Nur Fehler und knappe Spots</label></div>
+      </div>
+      <div class="stats" id="cStats"></div>
+      <div class="tablewrap"><table class="stable"><thead><tr><th>Bereich</th><th class="num">Spots</th><th class="num">Fehler</th><th class="num">zu weit</th><th class="num">zu eng</th><th>Tendenz</th></tr></thead><tbody id="cLeaks"></tbody></table></div>
+      <div class="tablewrap"><table class="stable"><thead><tr><th>Zeit</th><th>Pos</th><th>Karten</th><th>Spot</th><th>Du</th><th>GTO</th><th>Exploit</th><th>Urteil</th><th class="num">BB</th></tr></thead><tbody id="cBody"></tbody></table></div>
+      <p class="fine">Klick auf eine Zeile zeigt die Bewertung, die ganze Line bis zum River und die Ranges. „Zu weit“ heißt: du spielst Hände, die laut Referenz folden; „zu eng“: du foldest oder callst Hände, mit denen die Referenz weiterspielt bzw. raist. Postflop wird noch nicht bewertet.</p>
+    </div>
   </section>
 
   <div id="chartsView" hidden>
+  <div class="seg gameseg" id="chartGame" role="group" aria-label="Spiel"></div>
+  <div id="cashCharts" hidden>
+    <div class="tool">
+      <div class="left">
+        <div class="controls">
+          <div class="row"><h3>Situation</h3><div class="seg" id="ccKind" role="group"></div></div>
+          <div class="row"><h3>Deine Position</h3><div class="seg" id="ccHero" role="group"></div></div>
+          <div class="row" id="ccVillRow"><h3 id="ccVillLab">Gegner</h3><div class="seg" id="ccVill" role="group"></div></div>
+          <div class="row"><h3>Exploit gegen</h3><div class="vtype" id="ccVt"></div></div>
+        </div>
+        <div class="board">
+          <div class="board-head"><div class="board-title" id="ccTitle"></div><span class="badge" id="ccBadge"></span></div>
+          <div class="cgrid" id="ccGrid" aria-label="Range-Matrix Rush &amp; Cash"></div>
+          <div id="ccLegend"></div>
+          <label class="toggle" id="ccCmpWrap" hidden><input type="checkbox" id="ccCmp"> Unterschied zur GTO-Referenz zeigen</label>
+        </div>
+      </div>
+      <div class="right">
+        <div class="panel">
+          <label class="field" for="ccHand">Hand markieren<input id="ccHand" type="text" maxlength="12" placeholder="z. B. AJo oder AhJd"></label>
+          <div class="stats" id="ccStats"></div>
+          <p class="note" id="ccNote"></p>
+          <div id="ccNots"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="spinCharts">
   <div class="tool">
     <div class="left">
       <div class="controls">
@@ -474,6 +545,7 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
         <div id="notations"></div>
       </div>
     </div>
+  </div>
   </div>
 
   </div>
@@ -544,6 +616,11 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
         </table>
       </div>
       <p class="fine">Blinds: 10/20, 15/30, 20/40, 30/60, 40/80, 50/100, 60/120, 75/150, 90/180, 100/200 … Kein Ante.</p>
+    </section>
+
+    <section class="wide">
+      <h2>Rush &amp; Cash: woher die Ranges kommen</h2>
+      <p class="prose">Die 6-max-Ranges sind Referenzen für 100 BB effektiv, Opens auf 2,5 BB (SB 3 BB) und mit Rake. Sie sind aus veröffentlichten Solver-Lösungen abgeleitet und vereinfacht: jede Hand hat genau eine Aktion, gemischte Frequenzen sind gerundet. Selbst berechnet habe ich sie nicht; ein 6-max-Preflop-Solve mit Postflop-Spiel ist im Browser nicht machbar. Deshalb zeigt die Seite bei Rush &amp; Cash keine EV-Werte, sondern ob deine Aktion zur Range passt. Hände am Rand der Range sind als „knapp“ markiert. Iso-Raises gegen Limper, Squeezes und Cold-4-Bets sind Faustregeln. Die Exploit-Ranges verschieben die Grenzen nach dem gewählten Gegnertyp; die Typen sind Annahmen, keine Datenbank-Werte. Größere Opens als 2,5 BB verteidigt die Seite automatisch enger.</p>
     </section>
 
     <section class="wide">
@@ -1109,9 +1186,35 @@ const LR = (() => {
       return backs.some(c => Math.abs(c.cx - s.cx) < 5 * dh && c.cy < s.cy - .5 * dh && c.cy > s.cy - 10 * dh);
     });
     // 4b) community cards in the middle -> postflop
-    let board = 0;
-    { const top = Math.min(...seats.map(s => s.cy)), hy = seats[hero].cy, by0 = top + 2 * dh, by1 = hy - 14 * dh;
-      if (by1 > by0 + 2 * dh) { const bm = mask(im, P.white, .15 * W, by0, .85 * W, by1); board = comps(im, bm, 20).filter(c => c.h >= 1.3 * dh && c.h <= 3.2 * dh && c.w <= 2.6 * dh).length; } }
+    let board = 0, boardCards = [], pot = null;
+    { const top = Math.min(...seats.map(s => s.cy)), hy = seats[hero].cy, by0 = top + 2 * dh, by1 = hy - 12 * dh;
+      if (by1 > by0 + 2 * dh) {
+        const nearSeat = c => seats.some((s, i) => i !== hero && Math.abs(c.cx - s.cx) < 4.5 * dh && c.cy > s.cy - 9 * dh && c.cy < s.cy + 1.5 * dh);
+        const bm = mask(im, P.white, .14 * W, by0, .86 * W, by1);
+        const gl = comps(im, bm, 20).filter(c => c.h >= 1.15 * dh && c.h <= 3.2 * dh && c.w <= 2.6 * dh && !nearSeat(c));
+        if (gl.length >= 3) {
+          const topY = Math.min(...gl.map(c => c.y0));
+          const band = gl.filter(c => c.y0 <= topY + .9 * dh).sort((a, b) => a.x0 - b.x0);
+          const groups = [];
+          for (const c of band) { const g = groups[groups.length - 1]; if (g && c.x0 - g[g.length - 1].x1 < .55 * dh) g.push(c); else groups.push([c]); }
+          if (groups.length >= 3 && groups.length <= 5) {
+            board = groups.length;
+            boardCards = groups.map(g => {
+              const x0 = Math.min(...g.map(c => c.x0)), x1 = Math.max(...g.map(c => c.x1)), y0 = Math.min(...g.map(c => c.y0)), y1 = Math.max(...g.map(c => c.y1));
+              let rank = null;
+              if (g.length >= 2 || g[0].w / g[0].h > .95) rank = "T";
+              else { const c = classify(feat(g[0], W), "rank"); rank = c.s > .6 ? c.ch : null; }
+              const col = meanColor(im, x0 - .4 * dh, y0, x1 + .4 * dh, y1 + 1.6 * dh, (r, gg, b) => P.white(r, gg, b) || (r > 170 && gg > 170 && b > 170));
+              const suit = suitOf(col);
+              return rank && suit ? rank + suit : null;
+            });
+          }
+        }
+        // pot: yellow number in the middle of the table
+        const yl = comps(im, mask(im, P.yellow, .25 * W, by0, .75 * W, by1), 4).filter(c => c.h <= 2 * dh);
+        const pl = lines(yl).filter(l => l.some(g => g.h >= .6 * dh)).map(l => parseNum(im, l, P.yellow)).filter(Boolean).sort((a, b) => b.H - a.H);
+        if (pl.length) pot = pl[0].val;
+      } }
     // 5) hero cards
     const hs = seats[hero];
     const hx0 = hs.cx - 7 * dh, hx1 = hs.cx + 7 * dh, hy0 = hs.cy - 13 * dh, hy1 = hs.cy - 1.4 * dh;
@@ -1137,12 +1240,13 @@ const LR = (() => {
       }
     }
     // 6) action buttons visible (yellow numbers in lower part, right side)
-    const buttons = btnG.length >= 3;
+    const ynum = lines(yel.filter(c => c.cy > .6 * im.h && c.h >= .5 * dh && c.h <= 2.4 * dh)).map(l => parseNum(im, l, P.yellow)).filter(Boolean);
+    const buttons = ynum.length >= 2;
     // seat angles around the centroid
     const Cx = seats.reduce((a, s) => a + s.cx, 0) / seats.length, Cy = seats.reduce((a, s) => a + s.cy, 0) / seats.length;
     const out = {
-      game: seats.length <= 3 ? "spin_gold" : "other", name: null, unit, sb: unit === "bb" ? .5 : null, bb: unit === "bb" ? 1 : null, multi: null, prize: null, buyin: null,
-      hero_cards: heroCards, buttons, board,
+      game: seats.length <= 3 ? "spin_gold" : "rush_cash", name: null, unit, sb: unit === "bb" ? .5 : null, bb: unit === "bb" ? 1 : null, multi: null, prize: null, buyin: null,
+      hero_cards: heroCards, buttons, board, board_cards: boardCards, pot,
       seats: seats.map((s, i) => ({ ang: ((Math.atan2(s.cy - Cy, s.cx - Cx) * 180 / Math.PI) + 360) % 360, hero: i === hero, stack: s.val, bet: bets[i], dealer: i === dealer, cards: hasCards[i], label: "" })),
     };
     const issues = [];
@@ -1664,6 +1768,11 @@ async function readShot(blob, mode) {
   rvStatus("busy", "Erkenne Tisch …");
   const r = await readLocal(blob);
   const claudeOK = () => sampleFn && imgOK;
+  if (r.ok && r.raw.game === "rush_cash") {
+    showCashShot(r.raw);
+    rvStatus("ok", `Sofort erkannt in ${Math.max(1, Math.round(r.ms))} ms, ohne Claude: Rush & Cash, ${r.raw.seats.length} Spieler. Prüf kurz Karten und Position.`); showReread(); return;
+  }
+  setRvMode("spin");
   if (r.ok) {
     applyExtraction(rawToHand(r.raw));
     const ms = Math.max(1, Math.round(r.ms));
@@ -1700,6 +1809,8 @@ async function readClaude(blob, tier) {
     clearInterval(tick);
     const raw = parseLooseJSON(res && res.text);
     if (!raw) throw { code: "invalid_json" };
+    if (Array.isArray(raw.seats) && raw.seats.length >= 4) { showCashShot(Object.assign({}, raw, { game: "rush_cash", board: NUMV(raw.board) || 0 })); rvStatus("ok", "Rush & Cash ausgelesen. Prüf kurz Karten und Position."); return; }
+    setRvMode("spin");
     const tierName = { quick: "schnell", default: "Standard", complex: "gründlich" }[res.modelTierApplied] || res.modelTierApplied || "?";
     const s1 = v => fmt((v / 1000).toFixed(1));
     rv.timing = `Bild vorbereitet ${s1(tSent - t0)} s · Wartezeit bis zur ersten Antwort ${s1((tFirst || performance.now()) - tSent)} s · Antwort geschrieben in ${s1(performance.now() - (tFirst || performance.now()))} s · Modell: ${tierName}`;
@@ -1810,6 +1921,7 @@ function handFromD(d) {
   return H;
 }
 function fillForm(H) {
+  setRvMode("spin");
   rv.example = false; $("exampleNote").hidden = true;
   if (H.other) { rv.unsupported = H.unsupported; $("readNotes").hidden = true; renderReview(); return; }
   $("fFormat").value = H.fmt; syncFormShape();
@@ -1877,7 +1989,7 @@ function parseHH(text, fileName) {
   const blocks = String(text).replace(/\r/g, "").split(/\n(?=Poker Hand #)/);
   const num = v => v == null ? null : parseFloat(String(v).replace(/,/g, ""));
   for (const blk of blocks) {
-    if (!/^Poker Hand #/m.test(blk)) continue;
+    if (!/^Poker Hand #/m.test(blk) || isCashBlock(blk)) continue;
     const L = blk.split("\n").map(l => l.trim()).filter(Boolean);
     const head = L[0];
     const id = (head.match(/^Poker Hand #(\S+?):/) || [])[1] || "";
@@ -1960,24 +2072,30 @@ async function loadSessionFiles(fileList) {
   const t0 = performance.now(); let nImg = 0, nImgFail = 0, nTxt = 0;
   const seen = new Set(sess.items.map(x => x.key));
   const add = (it) => { const key = it.id ? "hh:" + it.id : "img:" + it.file + ":" + sess.items.length; if (seen.has(key)) return; seen.add(key); it.key = key; sess.items.push(it); };
+  const seenC = new Set(sessC.hands.map(h => h.id));
+  const addCash = (hd) => { if (seenC.has(hd.id)) return; seenC.add(hd.id); sessC.hands.push(hd); };
+  const addCashImg = (file, raw) => { const S = cashSeatsFromRaw(raw); const hd = { id: "img:" + file + ":" + sessC.hands.length, src: "img", file, time: "", cards: raw.hero_cards || "", heroPos: S ? S.heroPos : "" };
+    if (S && (raw.board || 0) < 3) { const sa = cashSnapshotActs(S); hd.snap = { ctx: CASH.classify(sa.acts, S.heroPos, S.n), h: handIdxOf(raw.hero_cards), eff: cashEff(S), k: 0 }; if (hd.snap.h == null) hd.snap = null; }
+    addCash(hd); };
   for (const f of files) {
     try {
       if (/\.zip$/i.test(f.name) || f.type === "application/zip") {
         const inner = await unzip(await f.arrayBuffer());
-        for (const z of inner) if (/\.txt$/i.test(z.name)) { nTxt++; parseHH(new TextDecoder().decode(z.bytes), z.name).forEach(add); }
+        for (const z of inner) if (/\.txt$/i.test(z.name)) { nTxt++; const tx = new TextDecoder().decode(z.bytes); parseHH(tx, z.name).forEach(add); parseCashHH(tx, z.name).forEach(addCash); }
       } else if (/^image\//.test(f.type)) {
         nImg++;
         const r = await readLocal(f);
-        if (r.ok) add({ id: "", time: "", file: f.name, d: rawToHand(r.raw), img: true });
+        if (r.ok && r.raw.game === "rush_cash") addCashImg(f.name, r.raw);
+        else if (r.ok) add({ id: "", time: "", file: f.name, d: rawToHand(r.raw), img: true });
         else { nImgFail++; add({ id: "", time: "", file: f.name, d: null, img: true, fail: r.reason || "nicht erkannt" }); }
-      } else { nTxt++; parseHH(await f.text(), f.name).forEach(add); }
+      } else { nTxt++; const tx = await f.text(); parseHH(tx, f.name).forEach(add); parseCashHH(tx, f.name).forEach(addCash); }
     } catch (e) { add({ id: "", time: "", file: f.name, d: null, fail: "Datei konnte nicht gelesen werden" }); }
   }
-  evaluateSession();
+  evaluateSession(); evaluateCashSession();
   const ms = Math.round(performance.now() - t0);
-  const nH = sess.items.filter(x => x.d && !x.img).length;
-  if (!sess.items.length) sStatus("err", "In den Dateien wurden keine Hände gefunden. Lade die Handhistorie aus PokerCraft (Spin&Gold-Tab, Herunterladen) als .txt oder .zip.");
-  else sStatus("ok", `Fertig in ${fmt((ms / 1000).toFixed(1))} s: ${nH} Hände aus Handhistorien${nImg ? `, ${nImg - nImgFail} von ${nImg} Screenshots erkannt` : ""}.`);
+  const nH = sess.items.filter(x => x.d && !x.img).length, nC = sessC.hands.filter(h => h.src === "hh").length;
+  if (!sess.items.length && !sessC.hands.length) sStatus("err", "In den Dateien wurden keine Hände gefunden. Lade die Handhistorie aus PokerCraft als .txt oder .zip.");
+  else sStatus("ok", `Fertig in ${fmt((ms / 1000).toFixed(1))} s: ${[nH ? `${nH} Spin & Gold-Hände` : "", nC ? `${nC} Rush & Cash-Hände` : ""].filter(Boolean).join(" und ") || "keine Hände aus Handhistorien"}${nImg ? `, ${nImg - nImgFail} von ${nImg} Screenshots erkannt` : ""}.`);
 }
 function evaluateSession() {
   for (const it of sess.items) {
@@ -1993,7 +2111,7 @@ function evaluateSession() {
   renderSession();
 }
 function renderSession() {
-  const items = sess.items;
+  const items = sess.items.filter(x => !(x.d && x.d.game === "other"));
   $("sVt").innerHTML = VTYPES.filter(v => v.id !== "custom").map(v => `<button type="button" class="btn" data-svt="${v.id}" aria-pressed="${v.id === sess.vtype}">${v.label}</button>`).join("");
   $("sVt").querySelectorAll("[data-svt]").forEach(b => b.onclick = () => { sess.vtype = b.dataset.svt; evaluateSession(); });
   $("sResults").hidden = !items.length;
@@ -2032,7 +2150,7 @@ function renderSession() {
 }
 $("sPick").addEventListener("click", () => $("sInput").click());
 $("sInput").addEventListener("change", e => { loadSessionFiles(e.target.files); e.target.value = ""; });
-$("sClear").addEventListener("click", () => { sess.items = []; renderSession(); sStatus(null); });
+$("sClear").addEventListener("click", () => { sess.items = []; renderSession(); sessC.hands = []; renderCashSession(); sStatus(null); });
 $("sOnlyErr").addEventListener("change", e => { sess.onlyErr = e.target.checked; renderSession(); });
 $("sX1500").addEventListener("change", e => { sess.x1500 = e.target.value; evaluateSession(); });
 const sDrop = $("sDrop");
@@ -2065,7 +2183,7 @@ $("vInput").addEventListener("change", e => {
   stopStream(); vid.srcObject = null; vid.controls = true; vr.quad = null; drawQuad();
   if (vr.url) URL.revokeObjectURL(vr.url);
   vr.url = URL.createObjectURL(f); vid.src = vr.url;
-  vr.spots = []; vr.lastKey = null; vr.pending = null; vr.cur = null;
+  vr.spots = []; vr.lastKey = null; vr.pending = null; vr.cur = null; ct.hand = null; vr.game = null;
   $("vMain").hidden = false; $("vRegionBtn").disabled = false; $("vNowBtn").disabled = false; $("vCornerBtn").disabled = false; $("vDropNote").hidden = true;
   renderVPanel(null); renderTimeline(); vLive("Video geladen. Drück auf Play.");
 });
@@ -2093,7 +2211,7 @@ $("vCamBtn").addEventListener("click", async () => {
     stopStream(); if (vr.url) { URL.revokeObjectURL(vr.url); vr.url = null; }
     vr.stream = st; vr.cam = true; vid.removeAttribute("src"); vid.srcObject = st; vid.controls = false;
     $("vLevels").checked = true; $("vPause").checked = false;
-    vr.spots = []; vr.lastKey = null; vr.pending = null; vr.cur = null; vr.region = { x: 0, y: 0, w: 1, h: 1 }; vr.quad = null; drawRect(); drawQuad();
+    vr.spots = []; vr.lastKey = null; vr.pending = null; vr.cur = null; ct.hand = null; vr.game = null; vr.region = { x: 0, y: 0, w: 1, h: 1 }; vr.quad = null; drawRect(); drawQuad();
     $("vMain").hidden = false; $("vRegionBtn").disabled = false; $("vNowBtn").disabled = false; $("vCornerBtn").disabled = false;
     renderVPanel(null); renderTimeline();
     await vid.play();
@@ -2168,13 +2286,20 @@ function spotFromRaw(raw, t) {
   return sp;
 }
 function reevalAll() {
-  for (const sp of vr.spots) { const m = $("vMulti").value; sp.d.multiplier = m === "jp" ? 1000 : +m; sp.H = handFromD(sp.d); sp.H.act = sp.act || ""; sp.ev = evalHand(sp.H, vr.vtype, rv.custom); }
+  for (const sp of vr.spots) { if (sp.cash) continue; const m = $("vMulti").value; sp.d.multiplier = m === "jp" ? 1000 : +m; sp.H = handFromD(sp.d); sp.H.act = sp.act || ""; sp.ev = evalHand(sp.H, vr.vtype, rv.custom); }
   renderVPanel(vr.cur); renderTimeline();
 }
 function setAct(sp, act) { sp.act = act; sp.H.act = act; sp.ev = evalHand(sp.H, vr.vtype, rv.custom); if (vr.pending === sp) vr.pending = null; renderVPanel(vr.cur); renderTimeline(); }
 function handleRead(r, t, manual) {
   if (!r || !r.ok) { vLive(manual ? "Auf diesem Bild ist kein Tisch erkannt. Markier den Tischbereich." : "Kein Tisch erkannt"); return; }
   const raw = r.raw;
+  // game switch with a little hysteresis, so one misread seat does not flip the mode
+  const g = raw.game === "rush_cash" ? "cash" : "spin";
+  vr.gRun = vr.gLast === g ? (vr.gRun || 0) + 1 : 1; vr.gLast = g;
+  const game = !vr.game || manual || vr.gRun >= 2 ? g : vr.game;
+  if (game === "cash") { if (g === "cash") cashFrame(raw, t, manual); else vLive("Läuft"); return; }
+  if (g === "cash") { vLive("Läuft"); return; }
+  vr.game = "spin";
   if (raw.game === "other") { vLive("Kein Spin & Gold (" + raw.seats.length + " Spieler)"); return; }
   const post = (raw.board || 0) >= 3;
   // resolve what the hero did at the previous decision
@@ -2223,8 +2348,14 @@ function verdictOf(sp) {
 }
 function renderVPanel(sp) {
   const el = $("vPanel");
+  const isCash = vr.game === "cash" || (sp && sp.cash);
+  $("vMultiWrap").hidden = isCash;
+  if (isCash) cashTypeBtns($("vVt"), ct.vtype, id => { ct.vtype = id; ctReeval(); });
+  else {
   $("vVt").innerHTML = VTYPES.filter(v => v.id !== "custom").map(v => `<button type="button" class="btn" data-vvt="${v.id}" aria-pressed="${v.id === vr.vtype}">${v.label}</button>`).join("");
   $("vVt").querySelectorAll("[data-vvt]").forEach(b => b.onclick = () => { vr.vtype = b.dataset.vvt; reevalAll(); });
+  }
+  if (sp && sp.cash) return renderCashPanel(sp);
   if (!sp) { el.innerHTML = `<p class="muted">Starte das Video. Sobald du am Zug bist (Aktions-Buttons sichtbar), erscheint hier die Auswertung.</p>`; return; }
   const e = sp.ev, card = parseCards(sp.cards || "");
   const head = `<div class="vp-head"><span class="vp-time">${tFmt(sp.t)}</span><span class="vp-spot">${e && e.s ? e.s.title : "Entscheidung"}</span></div>`;
@@ -2246,7 +2377,8 @@ function renderTimeline() {
   const tb = $("vBody"); tb.replaceChildren();
   for (const sp of [...vr.spots].reverse()) {
     const e = sp.ev, tr = document.createElement("tr"); tr.className = "clickrow"; tr.tabIndex = 0;
-    if (!e || e.skip) tr.innerHTML = `<td class="mono">${tFmt(sp.t)}</td><td colspan="7" class="muted">${e && e.skip ? e.skip : "nicht bewertet"}</td>`;
+    if (sp.cash) cashTimelineRow(sp, tr);
+    else if (!e || e.skip) tr.innerHTML = `<td class="mono">${tFmt(sp.t)}</td><td colspan="7" class="muted">${e && e.skip ? e.skip : "nicht bewertet"}</td>`;
     else {
       const card = parseCards(sp.cards || ""), v = verdictOf(sp);
       const res = !sp.act ? `<span class="muted">offen</span>` : v.cls === "good" ? `<span class="okp">richtig</span>` : `<span class="loss">${evText(Math.max(e.costN || 0, 0), e.unit).replace("+", "−")}</span>`;
@@ -2259,8 +2391,792 @@ function renderTimeline() {
 }
 renderVPanel(null);
 
+// ================= Rush & Cash 6-max: preflop reference engine =================
+const CASH = (() => {
+  const RKS = "AKQJT98765432", NH = 169;
+  const CMB = []; for (let r = 0; r < 13; r++) for (let c = 0; c < 13; c++) CMB.push(r === c ? 6 : r < c ? 4 : 12);
+  const hname = i => { const r = Math.floor(i / 13), c = i % 13; return r === c ? RKS[r] + RKS[r] : r < c ? RKS[r] + RKS[c] + "s" : RKS[c] + RKS[r] + "o"; };
+  const pctOf = R => { let t = 0; for (let i = 0; i < NH; i++) t += R[i] * CMB[i]; return t / 1326 * 100; };
+  const combosOf = R => { let t = 0; for (let i = 0; i < NH; i++) t += R[i] * CMB[i]; return t; };
+
+  // ---- range notation parser: "22+, A2s+, KTs-K8s, AJo+, KQ, 76s" ----
+  function parse(str) {
+    const R = new Float32Array(NH);
+    const ix = (a, b, k) => { const i1 = RKS.indexOf(a), i2 = RKS.indexOf(b); if (i1 === i2) return i1 * 13 + i1; const hi = Math.min(i1, i2), lo = Math.max(i1, i2); return k === "s" ? hi * 13 + lo : lo * 13 + hi; };
+    const set = (a, b, k) => { if (a === b) { R[ix(a, a)] = 1; return; } if (k !== "o") R[ix(a, b, "s")] = 1; if (k !== "s") R[ix(a, b, "o")] = 1; };
+    for (let tok of String(str || "").split(",")) {
+      tok = tok.trim().toUpperCase().replace(/S$/, "s").replace(/O$/, "o").replace(/S\+$/, "s+").replace(/O\+$/, "o+").replace(/S-/, "s-").replace(/O-/, "o-");
+      if (!tok) continue;
+      let m;
+      if ((m = tok.match(/^([2-9TJQKA])\1\+$/))) { for (let r = RKS.indexOf(m[1]); r >= 0; r--) R[r * 13 + r] = 1; continue; }
+      if ((m = tok.match(/^([2-9TJQKA])\1-([2-9TJQKA])\2$/))) { let a = RKS.indexOf(m[1]), b = RKS.indexOf(m[2]); if (a > b) [a, b] = [b, a]; for (let r = a; r <= b; r++) R[r * 13 + r] = 1; continue; }
+      if ((m = tok.match(/^([2-9TJQKA])\1$/))) { const r = RKS.indexOf(m[1]); R[r * 13 + r] = 1; continue; }
+      if ((m = tok.match(/^([2-9TJQKA])([2-9TJQKA])([so]?)\+$/))) { const h = RKS.indexOf(m[1]); for (let l = RKS.indexOf(m[2]); l > h; l--) set(m[1], RKS[l], m[3]); continue; }
+      if ((m = tok.match(/^([2-9TJQKA])([2-9TJQKA])([so]?)-([2-9TJQKA])([2-9TJQKA])([so]?)$/)) && m[1] === m[4]) { let a = RKS.indexOf(m[2]), b = RKS.indexOf(m[5]); if (a > b) [a, b] = [b, a]; for (let l = a; l <= b; l++) set(m[1], RKS[l], m[3]); continue; }
+      if ((m = tok.match(/^([2-9TJQKA])([2-9TJQKA])([so]?)$/))) { set(m[1], m[2], m[3]); continue; }
+      throw new Error("Range-Token nicht lesbar: " + tok);
+    }
+    return R;
+  }
+  const minus = (A, B) => A.map((v, i) => B[i] > 0 ? 0 : v);
+  const union = (...S) => { const o = new Float32Array(NH); for (const s of S) for (let i = 0; i < NH; i++) if (s[i] > 0) o[i] = 1; return o; };
+
+  // ---- reference ranges: 6-max, 100 BB, 2.5 BB opens (SB 3 BB), rake-aware. Approximations of solver output, pure (no mixing). ----
+  const RFI = {
+    UTG: "22+, A2s+, K9s+, Q9s+, J9s+, T9s, 98s, 87s, ATo+, KJo+",
+    HJ: "22+, A2s+, K7s+, Q9s+, J9s+, T8s+, 98s, 87s, 76s, 65s, A9o+, KTo+, QJo",
+    CO: "22+, A2s+, K5s+, Q8s+, J8s+, T8s+, 97s+, 86s+, 75s+, 65s, 54s, A8o+, A5o, KTo+, QTo+, JTo",
+    BTN: "22+, A2s+, K2s+, Q4s+, J6s+, T6s+, 96s+, 85s+, 74s+, 64s+, 53s+, 43s, A2o+, K8o+, Q9o+, J9o+, T9o, 98o",
+    SB: "22+, A2s+, K2s+, Q5s+, J7s+, T7s+, 97s+, 86s+, 75s+, 65s, 54s, A2o+, K9o+, Q9o+, J9o+, T9o",
+  };
+  // r = raise (3-bet), b = bluff part of r, c = call
+  const VSOPEN = {
+    "HJ<UTG": { r: "QQ+, AKs, AQs, AJs, KQs, AKo, A5s, A4s", b: "A5s, A4s", c: "JJ-66, ATs, KJs, QJs, JTs, T9s, AQo" },
+    "CO<UTG": { r: "QQ+, AKs, AQs, AJs, KQs, AKo, A5s, A4s", b: "A5s, A4s", c: "JJ-55, ATs, KJs, KTs, QJs, JTs, T9s, AQo" },
+    "CO<HJ": { r: "JJ+, AKs-ATs, KQs, KJs, AKo, AQo, A5s-A3s", b: "A5s-A3s", c: "TT-55, A9s, KTs, QJs, QTs, JTs, T9s, 98s, AJo, KQo" },
+    "BTN<UTG": { r: "QQ+, AKs, AQs, KQs, AKo, A5s, A4s", b: "A5s, A4s", c: "JJ-22, AJs-A9s, KJs, KTs, QJs, QTs, JTs, J9s, T9s, 98s, 87s, 76s, AQo" },
+    "BTN<HJ": { r: "JJ+, AKs-AJs, KQs, AKo, AQo, A5s-A3s, K9s", b: "A5s-A3s, K9s", c: "TT-22, ATs-A8s, KJs, KTs, QJs, QTs, JTs, J9s, T9s, T8s, 98s, 87s, 76s, 65s, AJo, KQo" },
+    "BTN<CO": { r: "TT+, AKs-ATs, KQs, KJs, AKo-AJo, KQo, A5s-A2s, K9s, Q9s, 54s", b: "A5s-A2s, K9s, Q9s, 54s", c: "99-22, A9s-A6s, KTs, QJs, QTs, JTs, J9s, T9s, T8s, 98s, 97s, 87s, 76s, 65s, ATo, KJo, QJo" },
+    "SB<UTG": { r: "TT+, AKs-AJs, KQs, AKo, A5s, A4s", b: "A5s, A4s", c: "" },
+    "SB<HJ": { r: "99+, AKs-ATs, KQs, KJs, QJs, AKo, AQo, A5s-A3s", b: "A5s-A3s", c: "" },
+    "SB<CO": { r: "88+, AKs-A9s, KQs-KTs, QJs, QTs, JTs, T9s, AKo-AJo, KQo, A5s-A2s", b: "A5s-A2s, T9s", c: "" },
+    "SB<BTN": { r: "66+, A2s+, K9s+, Q9s+, J9s+, T9s, 98s, 87s, ATo+, KJo+", b: "A5s-A2s, K9s, Q9s, J9s, 87s", c: "" },
+    "BB<UTG": { r: "QQ+, AKs, AQs, AKo, A5s", b: "A5s", c: "JJ-22, AJs-A6s, A4s-A2s, KQs-K8s, QJs-Q9s, JTs, J9s, T9s, T8s, 98s, 97s, 87s, 76s, 65s, 54s, AQo-ATo, KQo, KJo" },
+    "BB<HJ": { r: "JJ+, AKs, AQs, KQs, AKo, A5s, A4s", b: "A5s, A4s", c: "TT-22, AJs-A6s, A3s, A2s, KJs-K6s, QJs-Q8s, JTs-J8s, T9s-T7s, 98s-96s, 87s, 86s, 76s, 75s, 65s, 64s, 54s, AQo-A9o, KQo-KTo, QJo, QTo, JTo" },
+    "BB<CO": { r: "TT+, AKs-AJs, KQs, KJs, AKo, AQo, A5s-A3s, 65s", b: "A5s-A3s, 65s", c: "99-22, ATs-A6s, A2s, KTs-K3s, QJs-Q6s, JTs-J7s, T9s-T7s, 98s-96s, 87s-85s, 76s-74s, 64s, 54s, 53s, 43s, AJo-A7o, KQo-K9o, QJo-Q9o, JTo, J9o, T9o" },
+    "BB<BTN": { r: "99+, AKs-ATs, KQs, KJs, AKo-AJo, KQo, A5s-A2s, K9s, 65s, 54s", b: "A5s-A2s, K9s, 65s, 54s", c: "88-22, A9s-A6s, KTs, K8s-K2s, QJs-Q2s, JTs-J4s, T9s-T5s, 98s-95s, 87s-84s, 76s-74s, 64s, 63s, 53s, 52s, 43s, 42s, ATo-A2o, KJo-K7o, QJo-Q8o, JTo-J8o, T9o, T8o, 98o, 87o" },
+    "BB<SB": { r: "88+, AKs-ATs, KQs, KJs, AKo-AJo, KQo, A5s-A2s, K9s, Q9s, J9s", b: "A5s-A2s, K9s, Q9s, J9s", c: "77-22, A9s-A6s, KTs, K8s-K2s, QJs, QTs, Q8s-Q3s, JTs, J8s-J5s, T9s-T6s, 98s-95s, 87s-85s, 76s-74s, 65s-63s, 54s, 53s, 43s, ATo-A2o, KJo-K8o, QJo-Q9o, JTo, J9o, T9o, 98o" },
+  };
+  const VS3B = {
+    "UTG|later": { r: "KK+, AKs, A5s", b: "A5s", c: "QQ-88, AKo, AQs-ATs, KQs, KJs, QJs, JTs" },
+    "UTG|blinds": { r: "KK+, AKs, A5s", b: "A5s", c: "QQ-77, AKo, AQs-ATs, KQs, KJs, QJs, JTs, T9s, AQo" },
+    "HJ|later": { r: "KK+, AKs, AKo, A5s, A4s", b: "A5s, A4s", c: "QQ-77, AQs-ATs, KQs, KJs, QJs, JTs, T9s, AQo" },
+    "HJ|blinds": { r: "QQ+, AKs, AKo, A5s, A4s", b: "A5s, A4s", c: "JJ-66, AQs-A9s, KQs-KTs, QJs, QTs, JTs, T9s, 98s, AQo" },
+    "CO|later": { r: "QQ+, AKs, AKo, A5s, A4s", b: "A5s, A4s", c: "JJ-66, AQs-A9s, KQs-KTs, QJs, QTs, JTs, T9s, 98s, AQo" },
+    "CO|blinds": { r: "QQ+, AKs, AKo, A5s-A3s", b: "A5s-A3s", c: "JJ-55, AQs-A8s, KQs-K9s, QJs-Q9s, JTs, J9s, T9s, 98s, 87s, AQo, AJo, KQo" },
+    "BTN|blinds": { r: "QQ+, AKs, AKo, A5s-A3s", b: "A5s-A3s", c: "JJ-22, AQs-A6s, A2s, KQs-K8s, QJs-Q9s, JTs, J9s, T9s, T8s, 98s, 87s, 76s, 65s, AQo-ATo, KQo, KJo" },
+    "SB|BB": { r: "QQ+, AKs, AKo, A5s, A4s", b: "A5s, A4s", c: "JJ-44, AQs-A6s, A3s, A2s, KQs-K9s, QJs-Q9s, JTs, J9s, T9s, 98s, 87s, 76s, AQo, AJo, KQo" },
+  };
+  const VS4B = { IP: { r: "KK+, AKs", b: "", c: "QQ, JJ, AKo, AQs" }, OOP: { r: "KK+, AKs, AKo", b: "", c: "QQ, JJ" } };
+  const VS5B = { r: "", b: "", c: "QQ+, AKs, AKo" };
+  const VSSQZ = { r: "KK+, AKs", b: "", c: "QQ-99, AKo, AQs, AJs, KQs" };
+  const COLD4B = { r: "KK+, AKs, A5s", b: "A5s", c: "QQ, AKo" };
+
+  const POS6 = ["UTG", "HJ", "CO", "BTN", "SB", "BB"];
+  const POST_ORDER = ["SB", "BB", "UTG", "HJ", "CO", "BTN"];
+  const posNames = n => n >= 6 ? POS6.slice() : n === 5 ? ["HJ", "CO", "BTN", "SB", "BB"] : n === 4 ? ["CO", "BTN", "SB", "BB"] : n === 3 ? ["BTN", "SB", "BB"] : ["SB", "BB"];
+  const ipOf = (a, b) => POST_ORDER.indexOf(a) > POST_ORDER.indexOf(b); // a acts after b postflop
+
+  // ---- hand order: nested open tiers, then a strength heuristic inside each tier ----
+  const ORDER = (() => {
+    const tiers = [RFI.UTG, RFI.HJ, RFI.CO, RFI.BTN, VSOPEN["BB<BTN"].c + ", " + VSOPEN["BB<BTN"].r].map(parse);
+    const tierOf = i => { for (let t = 0; t < tiers.length; t++) if (tiers[t][i] > 0) return t; return tiers.length; };
+    const score = i => { const r = Math.floor(i / 13), c = i % 13; if (r === c) return 60 + (12 - r) * 3.2;
+      const hi = Math.min(r, c), lo = Math.max(r, c), gap = lo - hi - 1, s = r < c;
+      return (12 - hi) * 2 + (12 - lo) + (s ? 9 : 0) + (gap === 0 ? 3 : gap === 1 ? 2 : gap === 2 ? 1 : 0); };
+    const idx = [...Array(NH).keys()].sort((a, b) => (tierOf(a) - tierOf(b)) || (score(b) - score(a)));
+    const rank = new Int16Array(NH); idx.forEach((h, k) => { rank[h] = k; });
+    return { idx, rank };
+  })();
+  // raw value order (for 3-bet/4-bet value parts and iso-raises): big cards and pairs first
+  const VORDER = (() => {
+    const score = i => { const r = Math.floor(i / 13), c = i % 13; if (r === c) return 30 + (12 - r) * 3.5;
+      const hi = Math.min(r, c), lo = Math.max(r, c); return (12 - hi) * 3 + (12 - lo) * 1.5 + (r < c ? 3 : 0) + (lo - hi === 1 ? 1 : 0); };
+    return { idx: [...Array(NH).keys()].sort((a, b) => score(b) - score(a)) };
+  })();
+  const BLUFF_ORDER = ["A5s", "A4s", "A3s", "A2s", "K9s", "Q9s", "J9s", "K8s", "65s", "54s", "76s", "T8s", "97s", "86s", "K7s", "Q8s", "K6s", "75s", "64s", "53s", "J8s", "K5s", "A9o", "KTo", "QTo", "JTo"].map(n => { const R = parse(n); return R.findIndex(v => v > 0); });
+
+  // ---- villain types (assumptions, not database values) ----
+  const TYPES = [
+    { id: "reg", label: "Reg (GTO)", wide: 1, fold: 1, aggr: 1, desc: "Spielt nah am Gleichgewicht. Exploit und GTO sind gleich." },
+    { id: "pool", label: "NL5-Pool", wide: 1.1, fold: 1.1, aggr: .7, desc: "Typischer Micro-Stakes-Gegner: 3-Bets und 4-Bets sind value-lastig, gegen Steals wird etwas zu oft gefoldet." },
+    { id: "fish", label: "Fisch", wide: 1.7, fold: .55, aggr: .55, desc: "Spielt viele Hände, callt zu viel und raist selten." },
+    { id: "nit", label: "Nit", wide: .7, fold: 1.4, aggr: .55, desc: "Spielt wenige Hände, foldet zu viel; seine Raises sind sehr stark." },
+    { id: "maniac", label: "Aggro", wide: 1.5, fold: .85, aggr: 1.8, desc: "Opent weit und 3-bettet viel zu oft." },
+  ];
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function factors(kind, t) {
+    const { wide: w, fold: f, aggr: a } = t;
+    switch (kind) {
+      case "rfi": { const o = clamp(1 + .45 * (f - 1) - .25 * (a - 1) + .15 * (w - 1), .7, 1.5); return { v: o, b: 1, c: 1 }; }
+      case "iso": case "bbvslimp": { const o = clamp(1 + .5 * (w - 1) + .3 * (1 - f), .7, 1.6); return { v: o, b: 1, c: 1 }; }
+      case "vsopen": case "squeeze": return { v: clamp(Math.pow(w, .8) * (1 + .5 * Math.max(0, 1 - f)), .6, 2), b: clamp(Math.pow(f, 1.5) / Math.pow(a, .3), .3, 1.8), c: clamp(Math.pow(w, .7), .6, 1.6) };
+      case "vs3b": return { v: clamp(Math.pow(a, .6), .6, 1.6), b: clamp(f * a, .3, 1.6), c: clamp(Math.pow(a, .9) * (1 + .2 * (w - 1)), .5, 1.6) };
+      case "vs4b": case "vs5b": case "vssqz": case "cold4b": { const k = clamp(Math.pow(a, .9), .5, 1.6); return { v: k, b: clamp(f * a, .3, 1.6), c: k }; }
+      default: return { v: 1, b: 1, c: 1 };
+    }
+  }
+
+  // ---- scaling a spot's ranges ----
+  function scaleSet(base, factor, cands, ord) { // cands: hands to add in order (strongest first); removal drops the weakest of base by ord
+    const target = combosOf(base) * factor, out = Float32Array.from(base);
+    if (factor > 1) { let acc = combosOf(out); for (const h of cands) { if (acc >= target - CMB[h] / 2) break; if (out[h] > 0) continue; out[h] = 1; acc += CMB[h]; } }
+    else if (factor < 1) { let acc = combosOf(out); const ins = (ord || ORDER).idx.filter(h => out[h] > 0).reverse(); for (const h of ins) { if (acc - CMB[h] / 2 < target) break; out[h] = 0; acc -= CMB[h]; } }
+    return out;
+  }
+  function adjust(sp, F) {
+    if (!F || (F.v === 1 && F.b === 1 && F.c === 1)) return sp;
+    const V = minus(sp.r, sp.b), hasCall = sp.callable;
+    // value raises: grow from the top of the call range, then from folds; shrink → demote to call (if calling exists) or fold
+    const Vn = sp.kind === "rfi" ? scaleSet(V, F.v, ORDER.idx, ORDER) : scaleSet(V, F.v, [...VORDER.idx.filter(h => sp.c[h] > 0), ...VORDER.idx.filter(h => sp.c[h] === 0 && sp.r[h] === 0)], VORDER);
+    const demoted = minus(V, Vn);
+    // bluffs: grow along the bluff list, shrink from its end
+    let Bn;
+    const bl = BLUFF_ORDER.filter(h => Vn[h] === 0);
+    if (F.b >= 1) { Bn = Float32Array.from(sp.b); const target = combosOf(sp.b) * F.b; let acc = combosOf(Bn); for (const h of bl) { if (acc >= target - CMB[h] / 2) break; if (Bn[h] > 0 || sp.c[h] > 0) continue; Bn[h] = 1; acc += CMB[h]; } }
+    else { Bn = Float32Array.from(sp.b); const target = combosOf(sp.b) * F.b; let acc = combosOf(Bn); const ins = [...bl].reverse().filter(h => Bn[h] > 0); for (const h of ins) { if (acc - CMB[h] / 2 < target) break; Bn[h] = 0; acc -= CMB[h]; } }
+    for (let i = 0; i < NH; i++) if (Vn[i] > 0) Bn[i] = 0;
+    const R = union(Vn, Bn);
+    let C = hasCall ? minus(union(sp.c, demoted), R) : new Float32Array(NH);
+    if (hasCall && sp.c.some(v => v > 0)) C = scaleSet(C, F.c, ORDER.idx.filter(h => R[h] === 0), ORDER);
+    C = minus(C, R);
+    return Object.assign({}, sp, { r: R, b: Bn, c: C, adjusted: true });
+  }
+  const actOf = (sp, h) => sp.r[h] > 0 ? "raise" : sp.c[h] > 0 ? (sp.checkable ? "check" : "call") : (sp.checkable ? "check" : "fold");
+
+  // ---- spot construction ----
+  const r5 = v => Math.round(v * 2) / 2;
+  function make(kind, o) {
+    const sp = { kind, hero: o.hero, vill: o.vill || null, approx: false, notes: [], callable: true, checkable: false };
+    const fromDef = (d) => { sp.r = parse(d.r); sp.b = parse(d.b); sp.c = parse(d.c); };
+    const open = o.openTo || (o.vill === "SB" ? 3 : 2.5);
+    switch (kind) {
+      case "rfi": fromDef({ r: RFI[o.hero], b: "", c: "" }); sp.callable = false; sp.title = o.hero === "SB" ? "SB: alle gefoldet" : `${o.hero}: Erster im Pot`; sp.size = o.hero === "SB" ? 3 : 2.5; sp.raiseName = "Open"; break;
+      case "iso": { const base = parse(RFI[o.hero === "BB" ? "SB" : o.hero] || RFI.BTN); sp.r = scaleSet(base, .62, [], VORDER); sp.b = new Float32Array(NH); sp.c = new Float32Array(NH); sp.callable = false; sp.approx = true;
+        sp.title = `${o.hero} gegen ${o.nLimp > 1 ? o.nLimp + " Limper" : "Limper"}`; sp.size = r5((["SB", "BB"].includes(o.hero) ? 4.5 : 3.5) + (o.nLimp - 1)); sp.raiseName = "Iso-Raise";
+        sp.notes.push("Iso-Raise-Range ist eine Faustregel (stärkerer Teil deiner Open-Range), nicht berechnet. Overlimpen ist nicht vorgesehen."); break; }
+      case "bbvslimp": { sp.r = scaleSet(parse(RFI.BTN), .72, [], VORDER); sp.b = new Float32Array(NH); sp.c = new Float32Array(NH); sp.checkable = true; sp.approx = true; sp.callable = false;
+        sp.title = o.nLimp > 1 ? `BB gegen ${o.nLimp} Limper` : "BB gegen Limp"; sp.size = r5(o.nLimp > 1 ? 4 + o.nLimp : 4); sp.raiseName = "Raise"; sp.notes.push("Faustregel: mit dem stärkeren Teil raisen, den Rest checken."); break; }
+      case "vsopen": case "squeeze": { const d = VSOPEN[`${o.hero}<${o.vill}`]; if (!d) return null; fromDef(d);
+        const ip = !["SB", "BB"].includes(o.hero), mult = ip ? 3 : o.hero === "SB" ? 4 : (o.vill === "SB" ? 3 : 4.4);
+        sp.callable = sp.c.some(v => v > 0) || o.hero === "BB";
+        sp.raiseName = "3-Bet"; sp.size = r5(open * mult);
+        if (kind === "vsopen") sp.title = `${o.hero} gegen ${o.vill}-Open`;
+        else { sp.title = `${o.hero} gegen ${o.vill}-Open + ${o.nCall > 1 ? o.nCall + " Calls" : "Call"}`; sp.approx = true; sp.raiseName = "Squeeze"; sp.size = r5(open * (mult + 1 + o.nCall));
+          const t = adjust(sp, { v: .8, b: .5, c: o.hero === "BB" ? .85 : .6 }); sp.r = t.r; sp.b = t.b; sp.c = t.c; sp.notes.push("Squeeze-Ranges: aus der Verteidigung gegen den Open abgeleitet und enger gemacht, nicht eigens berechnet."); }
+        if (o.limpedBefore) { sp.approx = true; sp.notes.push("Vor dem Open hat jemand gelimpt; die Referenz gilt für den Open allein."); }
+        // open size adjustment: bigger opens → defend tighter
+        if (o.openTo && Math.abs(o.openTo - (o.vill === "SB" ? 3 : 2.5)) > .3) {
+          const k = clamp(Math.pow((o.vill === "SB" ? 3 : 2.5) / o.openTo, .6), .7, 1.2);
+          const t = adjust(sp, { v: Math.min(1, k + .1), b: k, c: k }); sp.r = t.r; sp.b = t.b; sp.c = t.c;
+          sp.notes.push(`Open auf ${fmtBB(o.openTo)} statt ${o.vill === "SB" ? "3" : "2,5"} BB: Verteidigung ${k < 1 ? "enger" : "weiter"} gerechnet.`);
+        }
+        break; }
+      case "vs3b": { const later = !["SB", "BB"].includes(o.vill); const key = o.hero === "SB" ? "SB|BB" : o.hero === "BTN" ? "BTN|blinds" : `${o.hero}|${later ? "later" : "blinds"}`; const d = VS3B[key]; if (!d) return null; fromDef(d);
+        sp.title = `${o.hero}-Open gegen 3-Bet vom ${o.vill}`; sp.raiseName = "4-Bet"; const ip = ipOf(o.hero, o.vill); sp.size = r5((o.threeTo || 9) * (ip ? 2.2 : 2.5)); break; }
+      case "vs4b": { const ip = ipOf(o.hero, o.vill); fromDef(VS4B[ip ? "IP" : "OOP"]); sp.title = `3-Bet gegen 4-Bet vom ${o.vill}`; sp.raiseName = "All-in"; sp.size = null; break; }
+      case "vs5b": fromDef(VS5B); sp.title = "4-Bet gegen 5-Bet / All-in"; sp.raiseName = "All-in"; sp.size = null; break;
+      case "vssqz": fromDef(VSSQZ); sp.title = `Call gegen Squeeze vom ${o.vill}`; sp.approx = true; sp.raiseName = "4-Bet"; sp.size = r5((o.threeTo || 12) * 2.2); sp.notes.push("Faustregel-Range, nicht eigens berechnet."); break;
+      case "cold4b": fromDef(COLD4B); sp.title = "Open und 3-Bet vor dir"; sp.approx = true; sp.raiseName = "Cold-4-Bet"; sp.size = r5((o.threeTo || 8) * 2.4); sp.notes.push("Faustregel-Range, nicht eigens berechnet."); break;
+      default: return null;
+    }
+    sp.id = `${kind}:${o.hero}:${o.vill || ""}`;
+    return sp;
+  }
+  const fmtBB = v => v == null ? "–" : (Math.round(v * 10) / 10).toLocaleString("de-DE") + " BB";
+
+  // ---- classify a preflop decision from the ordered action list before it ----
+  // acts: [{pos, t: 'fold'|'call'|'check'|'raise', to}] in the order they happened (blinds not included)
+  function classify(acts, heroPos, n) {
+    const raises = [], limpers = []; let callers = [], lastHero = null, heroRaiseIdx = -1;
+    for (const a of acts) {
+      if (a.t === "raise") { raises.push(a); callers = []; if (a.pos === heroPos) { lastHero = { t: "raise", lvl: raises.length }; heroRaiseIdx = raises.length - 1; } }
+      else if (a.t === "call") { if (!raises.length) limpers.push(a.pos); else callers.push(a.pos); if (a.pos === heroPos) lastHero = { t: raises.length ? "call" : "limp", lvl: raises.length }; }
+      else if (a.t === "check" && a.pos === heroPos) lastHero = { t: "check", lvl: raises.length };
+    }
+    const top = raises[raises.length - 1];
+    if (!lastHero) {
+      if (!raises.length) {
+        if (!limpers.length) return heroPos === "BB" ? { none: "Alle haben gefoldet, du gewinnst die Blinds." } : { kind: "rfi", hero: heroPos };
+        return heroPos === "BB" ? { kind: "bbvslimp", hero: heroPos, vill: limpers[0], nLimp: limpers.length } : { kind: "iso", hero: heroPos, vill: limpers[0], nLimp: limpers.length };
+      }
+      if (raises.length === 1) {
+        if (!callers.length) return { kind: "vsopen", hero: heroPos, vill: raises[0].pos, openTo: raises[0].to, limpedBefore: limpers.length > 0 };
+        return { kind: "squeeze", hero: heroPos, vill: raises[0].pos, openTo: raises[0].to, nCall: callers.length };
+      }
+      if (raises.length === 2) return { kind: "cold4b", hero: heroPos, vill: raises[1].pos, threeTo: raises[1].to };
+      return { unsupported: "Mehr als zwei Raises vor dir: diese Linie deckt die Referenz nicht ab." };
+    }
+    const after = raises.length - lastHero.lvl; // raises since the hero last acted
+    if (after !== 1) return { unsupported: "Diese Linie deckt die Referenz nicht ab." };
+    const extra = callers.length ? " (mit Call dazwischen, Referenz gilt heads-up)" : "";
+    if (lastHero.t === "raise" && lastHero.lvl === 1 && !limpers.length) return { kind: "vs3b", hero: heroPos, vill: top.pos, threeTo: top.to, extra };
+    if (lastHero.t === "raise" && lastHero.lvl === 1) return { unsupported: "Iso-Raise gegen Limper, danach Re-Raise: wird nicht bewertet." };
+    if (lastHero.t === "raise" && lastHero.lvl === 2) return { kind: "vs4b", hero: heroPos, vill: top.pos, extra };
+    if (lastHero.t === "raise" && lastHero.lvl >= 3) return { kind: "vs5b", hero: heroPos, vill: top.pos };
+    if (lastHero.t === "call" && lastHero.lvl === 1) return { kind: "vssqz", hero: heroPos, vill: top.pos, threeTo: top.to };
+    return { unsupported: lastHero.t === "limp" ? "Du hast gelimpt und wurdest geraist: Limpen ist keine Linie der Referenz." : "Diese Linie deckt die Referenz nicht ab." };
+  }
+
+  // ---- evaluate one decision ----
+  // ctx: {kind,...} from classify; h: hand index; act: hero action {t, to} or null; vt: type id; eff: effective stack in BB
+  function evaluate(ctx, h, act, vtId, eff) {
+    if (!ctx || ctx.none || ctx.unsupported) return { skip: ctx ? (ctx.none || ctx.unsupported) : "Situation nicht erkannt" };
+    const sp = make(ctx.kind, ctx); if (!sp) return { skip: "Für diese Positionen gibt es keine Referenz-Range." };
+    if (ctx.extra) { sp.title += ctx.extra; sp.approx = true; }
+    const vt = TYPES.find(t => t.id === vtId) || TYPES[0];
+    const F = factors(sp.kind, vt), ex = adjust(sp, F);
+    const gto = actOf(sp, h), exA = actOf(ex, h);
+    const lo = actOf(adjust(sp, { v: .85, b: .85, c: .85 }), h), hi = actOf(adjust(sp, { v: 1.15, b: 1.15, c: 1.15 }), h);
+    const border = lo !== gto || hi !== gto;
+    const notes = sp.notes.slice();
+    if (eff != null && (eff < 60 || eff > 160)) notes.push(`Effektiv ${fmtBB(eff)}: die Referenz ist für etwa 100 BB gerechnet${eff < 60 ? ", mit kürzeren Stacks wird mehr all-in gespielt" : ", tiefer spielen spekulative Hände besser"}.`);
+    const res = { sp, ex, vt, gto, exA, border, notes, h, hand: hname(h), act: null, size: sp.size, bluff: sp.b[h] > 0, exBluff: ex.b[h] > 0 };
+    if (act && act.t) {
+      const a = act.t === "allin" ? "raise" : act.t === "bet" ? "raise" : act.t;
+      res.act = a; res.actTo = act.to;
+      const okG = a === gto || (gto === "check" && a === "check"), okE = a === exA;
+      const cont = x => x === "raise" || x === "call";
+      res.verdict = okG && okE ? "good" : okG ? "gto" : okE ? "exploit" : (border || (cont(a) && cont(gto))) ? "close" : "bad";
+      // direction of the deviation, for leak stats
+      const lvl = x => x === "raise" ? 2 : (x === "call" || x === "check") ? 1 : 0;
+      res.dir = lvl(a) > lvl(gto) ? "loose" : lvl(a) < lvl(gto) ? "tight" : "";
+      if (a === "raise" && act.to && sp.size && act.to < 90) { const q = act.to / sp.size; if (q > 1.45 || q < .7) res.sizeNote = `Größe ${fmtBB(act.to)}, Standard ${fmtBB(sp.size)}.`; }
+    }
+    return res;
+  }
+  // helper used by charts: build a spot by id parts
+  function spotFor(kind, hero, vill, vtId) {
+    const sp = make(kind, { hero, vill, nLimp: 1, nCall: 1 }); if (!sp) return null;
+    const vt = TYPES.find(t => t.id === vtId) || TYPES[0];
+    return { sp, ex: adjust(sp, factors(sp.kind, vt)), vt };
+  }
+  return { parse, make, adjust, factors, classify, evaluate, spotFor, actOf, TYPES, POS6, POST_ORDER, posNames, ipOf, pctOf, combosOf, hname, fmtBB, ORDER, RFI, VSOPEN, VS3B, VS4B };
+})();
+
+
+// ================= Rush & Cash: shared helpers =================
+const CBB = v => v == null ? "–" : fmt((Math.round(v * 10) / 10).toFixed(Number.isInteger(Math.round(v * 10) / 10) ? 0 : 1));
+const cardHtml1 = c => c ? `<span class="pcard ${c[1]}">${c[0]}${SUITS[c[1]]}</span>` : `<span class="pcard">?</span>`;
+const handIdxOf = cards => { const p = parseCards(cards || ""); return p ? p.idx : null; };
+function cashActText(res, a, to) {
+  if (a === "fold") return "Fold"; if (a === "check") return "Check"; if (a === "call") return "Call";
+  if (a === "raise") { const nm = res.sp.raiseName; if (to != null) return `${nm} ${CBB(to)} BB`; return res.sp.size ? `${nm} ${CBB(res.sp.size)} BB` : nm; }
+  return a || "—";
+}
+const CACT_CLS = { raise: "push", call: "call", check: "call", fold: "fold" };
+function cashDecHtml(res, a, extra) {
+  const name = a === "raise" ? res.sp.raiseName : cashActText(res, a), size = a === "raise" && res.sp.size ? ` <small>${CBB(res.sp.size)} BB</small>` : "";
+  return `<div class="decision ${CACT_CLS[a]}${name.length > 7 ? " dlong" : ""}">${name}${size}${extra || ""}</div>`;
+}
+function cashVerdict(res) {
+  if (!res || res.skip || !res.act) return null;
+  const you = cashActText(res, res.act, res.actTo), g = cashActText(res, res.gto), e = cashActText(res, res.exA), vt = res.vt.label;
+  switch (res.verdict) {
+    case "good": return { cls: "good", head: `${you}: richtig`, body: res.vt.id === "reg" ? "Passt zur Referenz." : `Passt zur Referenz und zum Exploit gegen ${vt}.` };
+    case "gto": return { cls: "mixed", head: `${you}: GTO-korrekt`, body: `Gegen ${vt} wäre ${e} besser.` };
+    case "exploit": return { cls: "mixed", head: `${you}: guter Exploit`, body: `Die Referenz spielt hier ${g}; gegen ${vt} ist deine Linie besser.` };
+    case "close": return { cls: "mixed", head: `${you}: knapp daneben`, body: (res.act === "raise" || res.act === "call") && (res.gto === "raise" || res.gto === "call") ? `Referenz: ${g}. Weiterspielen ist richtig, nur die Art (Call oder Raise) weicht ab; das kostet wenig.` : `Referenz: ${g}. Die Hand liegt an der Grenze der Range, der Fehler ist klein.` };
+    default: return { cls: "bad", head: `${you}: Fehler`, body: `Referenz: ${g}${res.exA !== res.gto ? `, gegen ${vt}: ${e}` : ""}. Die Hand liegt ${res.dir === "loose" ? "außerhalb deiner Range, du spielst zu weit" : "klar in der Range, du foldest bzw. spielst zu passiv"}.` };
+  }
+}
+function cashGrid(el, sp, heroIdx, base) {
+  el.replaceChildren();
+  for (let i = 0; i < 169; i++) {
+    const d = document.createElement("div"); d.className = "mcell"; d.textContent = handName(i);
+    const a = sp.r[i] > 0 ? (sp.b[i] > 0 ? "bluff" : "raise") : sp.c[i] > 0 ? "call" : "";
+    if (a === "raise") { d.style.background = "var(--push)"; d.style.color = "var(--on-push)"; }
+    else if (a === "bluff") { d.style.background = "var(--raise)"; d.style.color = "var(--on-raise)"; }
+    else if (a === "call") { d.style.background = "var(--call)"; d.style.color = "var(--on-call)"; }
+    if (base) { const b = base.r[i] > 0 ? 2 : base.c[i] > 0 ? 1 : 0, n = sp.r[i] > 0 ? 2 : sp.c[i] > 0 ? 1 : 0; if (b !== n) d.classList.add("diff"); }
+    if (i === heroIdx) d.classList.add("hero");
+    el.appendChild(d);
+  }
+}
+function cashLegend(sp) {
+  const it = [["var(--push)", sp.b.some(v => v > 0) ? sp.raiseName + " (Value)" : sp.raiseName]]; if (sp.b.some(v => v > 0)) it.push(["var(--raise)", sp.raiseName + " (Bluff)"]);
+  if (sp.c.some(v => v > 0)) it.push(["var(--call)", sp.checkable ? "Check" : "Call"]);
+  return `<div class="clegend">${it.map(([c, l]) => `<span><i style="background:${c}"></i>${l}</span>`).join("")}<span><i style="background:var(--cell)"></i>${sp.checkable ? "Check" : "Fold"}</span></div>`;
+}
+function cashTypeBtns(el, cur, onPick) {
+  el.innerHTML = CASH.TYPES.map(t => `<button type="button" class="btn" data-cvt="${t.id}" aria-pressed="${t.id === cur}" title="${t.desc}">${t.label}</button>`).join("");
+  el.querySelectorAll("[data-cvt]").forEach(b => b.onclick = () => onPick(b.dataset.cvt));
+}
+// result block: decision cards + verdict + notes (+ optional "what did you play" buttons)
+function cashResultHtml(res, opts) {
+  opts = opts || {};
+  if (!res || res.skip) return `<p class="cnote">${res && res.skip ? res.skip : "Nicht bewertbar."}</p>`;
+  const sp = res.sp, gl = cashActText(res, res.gto), el = cashActText(res, res.exA);
+  let h = `<div class="vp-lines"><div class="vp-line"><h3>GTO-Referenz</h3>${cashDecHtml(res, res.gto, res.border ? ` <small>knapp</small>` : "")}<div class="ev">${res.bluff ? "als Bluff · " : ""}${sp.raiseName} ${fmt(CASH.pctOf(sp.r).toFixed(1))} %${sp.c.some(v => v > 0) ? ` · ${sp.checkable ? "Check" : "Call"} ${fmt(CASH.pctOf(sp.c).toFixed(1))} %` : ""}</div></div>`;
+  h += `<div class="vp-line"><h3>Exploit · ${res.vt.label}</h3>${cashDecHtml(res, res.exA)}<div class="ev">${sp.raiseName} ${fmt(CASH.pctOf(res.ex.r).toFixed(1))} %${res.ex.c.some(v => v > 0) ? ` · ${sp.checkable ? "Check" : "Call"} ${fmt(CASH.pctOf(res.ex.c).toFixed(1))} %` : ""}</div></div></div>`;
+  if (opts.actButtons) {
+    const opt = sp.checkable ? ["check", "raise"] : sp.callable ? ["fold", "call", "raise"] : ["fold", "raise"];
+    h += `<div class="vp-act"><span>Gespielt:</span>${opt.map(a => `<button type="button" class="btn" data-cact="${a}" aria-pressed="${res.act === a}">${a === "raise" ? sp.raiseName : cashActText(res, a)}</button>`).join("")}${res.act ? "" : `<span class="muted">${opts.auto ? "wird nach der Aktion automatisch erkannt" : "tippen, um deine Aktion zu bewerten"}</span>`}</div>`;
+  }
+  const v = cashVerdict(res);
+  if (v) h += `<div class="vp-verdict ${v.cls}"><b>${v.head}</b><span>${v.body}${res.sizeNote ? " " + res.sizeNote : ""}</span></div>`;
+  const notes = res.notes.slice(); if (res.exA !== res.gto && res.vt.id !== "reg") notes.unshift(res.vt.desc);
+  if (notes.length) h += `<p class="cnote">${notes.join(" ")}</p>`;
+  return h;
+}
+function cashMinis(host, res) {
+  host.innerHTML = `<div class="mini"><div class="t"><span>GTO-Referenz</span><span>${res.sp.title}</span></div><div class="mgrid"></div></div><div class="mini"><div class="t"><span>Exploit · ${res.vt.label}</span><span>gestrichelt = anders</span></div><div class="mgrid"></div></div>${cashLegend(res.sp)}`;
+  const g = host.querySelectorAll(".mgrid"); cashGrid(g[0], res.sp, res.h); cashGrid(g[1], res.ex, res.h, res.sp);
+}
+// line of a hand: streets → html
+const ACT_DE = { fold: "Fold", check: "Check", call: "Call", bet: "Bet", raise: "Raise", allin: "All-in", post: "" };
+function cashLineHtml(streets, heroPos) {
+  return `<div class="cline">${streets.map(s => {
+    const head = `<div class="cl-head"><b>${s.name}</b>${s.board && s.board.length ? `<span class="cardsview">${s.board.map(cardHtml1).join("")}</span>` : ""}${s.pot != null ? `<span class="muted">Pot ${CBB(s.pot)} BB</span>` : ""}</div>`;
+    const folds = [], parts = [];
+    const flush = () => { if (folds.length) { parts.push(`<span class="ca fold">${folds.join(", ")} Fold</span>`); folds.length = 0; } };
+    for (const a of s.acts) {
+      if (a.t === "post") continue;
+      if (a.t === "fold" && a.pos !== heroPos) { folds.push(a.pos); continue; }
+      flush();
+      let txt = `${a.pos} ${ACT_DE[a.t] || a.t}`;
+      if (a.t === "bet") txt += ` ${CBB(a.to)}${a.pct != null ? ` (${Math.round(a.pct)} %)` : ""}`;
+      else if (a.t === "raise") txt += ` auf ${CBB(a.to)}`;
+      else if (a.t === "call" && a.to != null && s.name !== "Preflop") txt += ` ${CBB(a.to)}`;
+      if (a.allin && a.t !== "allin") txt += " (all-in)";
+      parts.push(`<span class="ca${a.pos === heroPos ? " hero" : ""}${a.est ? " est" : ""}">${txt}</span>`);
+    }
+    flush();
+    return `<div class="cl-street">${head}<div class="cl-acts">${parts.join("") || `<span class="muted">—</span>`}</div></div>`;
+  }).join("")}</div>`;
+}
+
+// ================= positions from a table image (6-max) =================
+const CDEG = { "bottom": 90, "bottom-left": 135, "left": 180, "top-left": 225, "top": 270, "top-right": 315, "right": 360, "bottom-right": 45 };
+function cashSeatsFromRaw(raw) {
+  const seats = (raw.seats || []).map(s => s && Object.assign({}, s, { stack: NUMV(s.stack), bet: NUMV(s.bet) || 0, ang: typeof s.ang === "number" ? s.ang : (CDEG[String(s.at || "").toLowerCase().trim().replace(/\s+/g, "-")] ?? 90) })).filter(s => s && typeof s.stack === "number");
+  const n = seats.length; if (n < 3) return null;
+  const hi = Math.max(0, seats.findIndex(s => s.hero));
+  const h0 = seats[hi].ang;
+  const cw = seats.map((s, i) => ({ s, a: i === hi ? -1 : ((s.ang - h0 + 360) % 360) })).sort((a, b) => a.a - b.a).map(o => o.s);
+  let d = cw.findIndex(s => s.dealer), notes = [];
+  if (d < 0) { const iSB = cw.findIndex(s => Math.abs((s.bet || 0) - .5) < .02); if (iSB >= 0) { d = (iSB - 1 + n) % n; notes.push("Dealer-Button nicht erkannt, Positionen aus den Blinds"); } else return null; }
+  const names = CASH.posNames(n); // preflop order, ends with SB, BB
+  const pos = new Array(n);
+  for (let k = 0; k < n; k++) { const i = (d + 1 + k) % n; pos[i] = k === 0 ? "SB" : k === 1 ? "BB" : names[k - 2]; }
+  const out = cw.map((s, i) => ({ pos: pos[i], stack: s.stack, bet: s.bet || 0, cards: s.cards !== false, hero: i === 0, ang: s.ang }));
+  return { n, seats: out, heroPos: pos[0], notes, order: names };
+}
+// preflop actions before the hero, reconstructed from one image
+function cashSnapshotActs(S) {
+  const by = p => S.seats.find(s => s.pos === p), hero = by(S.heroPos), order = S.order, acts = [], notes = [];
+  const posted = p => p === "SB" ? .5 : p === "BB" ? 1 : 0;
+  const heroBet = hero.bet || 0, maxBet = Math.max(1, ...S.seats.map(s => s.bet || 0));
+  const heroActed = heroBet > posted(S.heroPos) + .01;
+  const first = order.slice(0, order.indexOf(S.heroPos));
+  let max = 1;
+  if (!heroActed) {
+    for (const p of first) { const s = by(p); if (!s) continue;
+      if (!s.cards) acts.push({ pos: p, t: "fold" });
+      else if (s.bet > max + .01) { acts.push({ pos: p, t: "raise", to: s.bet }); max = s.bet; }
+      else if (s.bet > posted(p) + .01 && Math.abs(s.bet - max) <= .01) acts.push({ pos: p, t: "call", to: s.bet });
+      else { acts.push({ pos: p, t: "fold" }); notes.push(`${p}: Aktion unklar, als Fold gewertet`); } }
+    return { acts, notes };
+  }
+  // the hero has acted already: rebuild the most likely line
+  const raisers = S.seats.filter(s => !s.hero && s.cards && s.bet > heroBet + .01).sort((a, b) => b.bet - a.bet);
+  const top = raisers[0];
+  const opener = S.seats.find(s => !s.hero && s.cards && s.bet > 1.01 && s.bet < heroBet - .01 && first.includes(s.pos));
+  for (const p of first) { const s = by(p); if (!s) continue;
+    if (s === opener) acts.push({ pos: p, t: "raise", to: s.bet });
+    else if (top && s === top) { if (!opener) acts.push({ pos: p, t: "raise", to: 2.5, est: true }); }
+    else if (s.cards && Math.abs(s.bet - (opener ? opener.bet : 1)) <= .01 && s.bet > posted(p) + .01) acts.push({ pos: p, t: "call", to: s.bet });
+    else acts.push({ pos: p, t: "fold" }); }
+  acts.push({ pos: S.heroPos, t: "raise", to: heroBet });
+  if (top) acts.push({ pos: top.pos, t: "raise", to: top.bet });
+  notes.push("Linie vor deiner Entscheidung aus dem Bild geschätzt");
+  return { acts, notes };
+}
+const cashEff = (S, extra) => { const hero = S.seats.find(s => s.hero), others = S.seats.filter(s => !s.hero && s.cards).map(s => s.stack + s.bet); const hs = hero.stack + hero.bet; return others.length ? Math.min(hs, Math.max(...others)) : hs; };
+
+// ================= GG cash hand histories =================
+const isCashBlock = blk => /Hold'?em No Limit\s*\(\s*[$€£]?\s*[\d.,]+\s*\/\s*[$€£]?\s*[\d.,]+/i.test(blk) && !/Tournament|Spin\s*&?\s*Gold/i.test(blk);
+function parseCashHH(text, fileName) {
+  const out = [];
+  const blocks = String(text).replace(/\r/g, "").split(/\n(?=Poker Hand #)/);
+  const num = v => v == null ? null : parseFloat(String(v).replace(/[$€£,\s]/g, ""));
+  const AMT = "[$€£]?\\s?[\\d,]*\\.?\\d+";
+  for (const blk of blocks) {
+    if (!/^Poker Hand #/m.test(blk) || !isCashBlock(blk)) continue;
+    const L = blk.split("\n").map(l => l.trim()).filter(Boolean);
+    const head = L[0];
+    const id = (head.match(/^Poker Hand #(\S+?):/) || [])[1] || "";
+    const tm = head.match(/(\d{4}[\/-]\d{2}[\/-]\d{2})\s+(\d{1,2}:\d{2}(?::\d{2})?)/) || [];
+    const st = head.match(/\(\s*([$€£]?\s*[\d.,]+)\s*\/\s*([$€£]?\s*[\d.,]+)/); if (!st) continue;
+    const sbAmt = num(st[1]), bb = num(st[2]); if (!bb) continue;
+    const btnSeat = +((blk.match(/Seat #(\d+) is the button/) || [])[1] || 0);
+    const seats = []; for (const l of L) { const m = l.match(new RegExp(`^Seat (\\d+): (.+?) \\((${AMT}) in chips`)); if (m) seats.push({ seat: +m[1], name: m[2], stack: num(m[3]) / bb }); }
+    if (seats.length < 2) continue;
+    let hero = null, cards = null;
+    for (const l of L) { const m = l.match(/^Dealt to (.+?) \[([^\]]+)\]/); if (m && /[2-9TJQKA][shdc]\s*[2-9TJQKA][shdc]/i.test(m[2])) { hero = m[1]; cards = m[2].replace(/\s+/g, ""); break; } }
+    if (!hero) continue;
+    // positions: clockwise from the button
+    const n = seats.length, sorted = [...seats].sort((a, b) => a.seat - b.seat);
+    let bi = sorted.findIndex(s => s.seat === btnSeat);
+    const sbName = (L.find(l => / posts small blind /.test(l)) || "").split(":")[0], bbName = (L.find(l => / posts big blind /.test(l)) || "").split(":")[0];
+    if (bi < 0) { const si = sorted.findIndex(s => s.name === sbName); bi = si >= 0 ? (si - 1 + n) % n : 0; }
+    const names = CASH.posNames(n), posOf = {};
+    if (n === 2) { posOf[sorted[bi].name] = "SB"; posOf[sorted[(bi + 1) % 2].name] = "BB"; }
+    else for (let k = 0; k < n; k++) { const s = sorted[(bi + 1 + k) % n]; posOf[s.name] = k === 0 ? "SB" : k === 1 ? "BB" : names[k - 2]; }
+    if (sbName && posOf[sbName] !== "SB" && n > 2) { /* button seat with dead SB etc.: trust the posts */ posOf[sbName] = "SB"; if (bbName) posOf[bbName] = "BB"; }
+    // streets
+    const streets = [{ name: "Preflop", board: [], acts: [], pot: null }];
+    let cur = streets[0], board = [];
+    const contrib = {}; let level = 0; const inStreet = {};
+    const collected = {};
+    for (const l of L) {
+      let m;
+      if (/^\*\*\* (FIRST |SECOND )?(FLOP|TURN|RIVER) \*\*\*/.test(l)) {
+        if (/SECOND/.test(l)) break; // run-it-twice: keep the first board
+        const cs = [...l.matchAll(/\[([^\]]+)\]/g)].map(x => x[1].trim().split(/\s+/)).flat().filter(c => /^(10|[2-9TJQKA])[shdc]$/i.test(c)).map(c => (c.length === 3 ? "T" : c[0].toUpperCase()) + c.slice(-1).toLowerCase());
+        board = cs;
+        const potNow = Object.values(contrib).reduce((a, b) => a + b, 0);
+        cur = { name: /FLOP/.test(l) ? "Flop" : /TURN/.test(l) ? "Turn" : "River", board: board.slice(), acts: [], pot: potNow };
+        streets.push(cur); level = 0; for (const k in inStreet) delete inStreet[k];
+        continue;
+      }
+      if (/^\*\*\* (SHOW ?DOWN|SUMMARY)/.test(l)) { if (/SUMMARY/.test(l)) break; continue; }
+      if ((m = l.match(new RegExp(`^(.+?): posts (small blind|big blind|straddle|missing blind|missed blind|ante)\\s+(${AMT})`)))) {
+        const who = m[1], a = num(m[3]) / bb; if (/ante/.test(m[2])) { contrib[who] = (contrib[who] || 0) + a; continue; }
+        inStreet[who] = (inStreet[who] || 0) + a; contrib[who] = (contrib[who] || 0) + a; level = Math.max(level, inStreet[who]); cur.acts.push({ pos: posOf[who], who, t: "post", to: inStreet[who] }); continue;
+      }
+      if ((m = l.match(/^Uncalled bet \(([^)]+)\) returned to (.+)$/))) { const who = m[2], a = num(m[1]) / bb; contrib[who] = (contrib[who] || 0) - a; inStreet[who] = (inStreet[who] || 0) - a; continue; }
+      if ((m = l.match(new RegExp(`^(.+?) collected (${AMT}) from`)))) { collected[m[1]] = (collected[m[1]] || 0) + num(m[2]) / bb; continue; }
+      if ((m = l.match(new RegExp(`^(.+?): (folds|checks|calls (${AMT})|bets (${AMT})|raises (${AMT}) to (${AMT}))(.*all-in)?`)))) {
+        const who = m[1], allin = !!m[7], pos = posOf[who]; if (!pos) continue;
+        const potBefore = Object.values(contrib).reduce((a, b) => a + b, 0);
+        let t = m[2].split(" ")[0].toLowerCase(), to = null, pct = null;
+        if (t === "folds") t = "fold"; else if (t === "checks") t = "check";
+        else if (t === "calls") { t = "call"; const a = num(m[3]) / bb; inStreet[who] = (inStreet[who] || 0) + a; contrib[who] = (contrib[who] || 0) + a; to = inStreet[who]; }
+        else if (t === "bets") { t = "bet"; const a = num(m[4]) / bb; pct = potBefore > 0 ? a / potBefore * 100 : null; inStreet[who] = (inStreet[who] || 0) + a; contrib[who] = (contrib[who] || 0) + a; to = inStreet[who]; level = to; }
+        else { t = "raise"; to = num(m[6]) / bb; const add = to - (inStreet[who] || 0); inStreet[who] = to; contrib[who] = (contrib[who] || 0) + add; level = to; }
+        if (cur.name !== "Preflop" && t === "raise" && streets.length && !cur.acts.some(a => a.t === "bet" || a.t === "raise")) t = "bet";
+        cur.acts.push({ pos, who, t, to, pct, allin, hero: who === hero });
+      }
+    }
+    const invested = contrib[hero] || 0, won = collected[hero] || 0;
+    const stacks = {}; for (const s of seats) stacks[posOf[s.name]] = s.stack;
+    out.push({ id, date: tm[1] || "", time: tm[2] || "", file: fileName, cash: true, n, bbAmt: bb, sbAmt, heroPos: posOf[hero], cards, stacks, streets, net: won - invested, src: "hh" });
+  }
+  return out;
+}
+// all hero preflop decisions of a parsed hand
+function cashDecisions(hand) {
+  const pre = hand.streets[0].acts.filter(a => a.t !== "post");
+  const out = [];
+  const h = handIdxOf(hand.cards); if (h == null) return out;
+  const heroStack = hand.stacks[hand.heroPos];
+  pre.forEach((a, k) => {
+    if (a.pos !== hand.heroPos) return;
+    const before = pre.slice(0, k).map(x => ({ pos: x.pos, t: x.t === "bet" ? "raise" : x.t, to: x.to }));
+    const ctx = CASH.classify(before, hand.heroPos, hand.n);
+    const live = new Set(pre.slice(0, k).filter(x => x.t !== "fold").map(x => x.pos)); pre.slice(k + 1).forEach(x => live.add(x.pos));
+    const opp = Object.entries(hand.stacks).filter(([p]) => p !== hand.heroPos && live.has(p)).map(([, v]) => v);
+    const eff = opp.length ? Math.min(heroStack, Math.max(...opp)) : heroStack;
+    out.push({ ctx, h, act: { t: a.t === "bet" ? "raise" : a.t, to: a.to }, eff, k });
+  });
+  return out;
+}
+
+// ================= Session review: Rush & Cash =================
+const sessC = { hands: [], vtype: "pool", onlyErr: true, open: null };
+const famOf = sp => sp.kind === "rfi" ? `Open ${sp.hero}` : sp.kind === "vsopen" ? (sp.hero === "BB" ? "BB gegen Open" : sp.hero === "SB" ? "SB gegen Open" : "Gegen Open (IP)") : sp.kind === "vs3b" ? "Gegen 3-Bet" : (sp.kind === "vs4b" || sp.kind === "vs5b") ? "Gegen 4-Bet / 5-Bet" : (sp.kind === "iso" || sp.kind === "bbvslimp") ? "Gegen Limper" : "Squeeze / Cold-4-Bet";
+function evaluateCashSession() {
+  for (const hd of sessC.hands) {
+    if (hd.src === "img") { hd.decs = hd.snap ? [Object.assign({}, hd.snap, { res: CASH.evaluate(hd.snap.ctx, hd.snap.h, null, sessC.vtype, hd.snap.eff) })] : []; continue; }
+    hd.decs = cashDecisions(hd).map(d => Object.assign(d, { res: d.h == null ? { skip: "Karten fehlen" } : CASH.evaluate(d.ctx, d.h, d.act, sessC.vtype, d.eff) }));
+  }
+  renderCashSession();
+}
+function renderCashSession() {
+  const hs = sessC.hands; $("cResults").hidden = !hs.length; if (!hs.length) return;
+  cashTypeBtns($("cVt"), sessC.vtype, id => { sessC.vtype = id; evaluateCashSession(); });
+  const decs = hs.flatMap(hd => (hd.decs || []).map(d => ({ hd, d })));
+  const judged = decs.filter(x => x.d.res && !x.d.res.skip && x.d.res.verdict);
+  const bad = judged.filter(x => x.d.res.verdict === "bad"), close = judged.filter(x => x.d.res.verdict === "close");
+  const exMiss = judged.filter(x => x.d.res.verdict === "gto");
+  const hhHands = hs.filter(h => h.src === "hh"), net = hhHands.reduce((a, h) => a + (h.net || 0), 0);
+  $("cStats").innerHTML = [
+    [`${hs.length}`, "Hände"], [`${judged.length}`, "Preflop-Entscheidungen"], [`${bad.length}`, "Fehler"], [`${close.length}`, "knapp daneben"],
+    [`${exMiss.length}`, `Exploit verpasst (vs ${CASH.TYPES.find(t => t.id === sessC.vtype).label})`],
+    ...(hhHands.length ? [[`${net >= 0 ? "+" : "−"}${CBB(Math.abs(net))}`, `BB Ergebnis${hhHands.length >= 50 ? ` · ${fmt((net / hhHands.length * 100).toFixed(1))} BB/100` : ""}`]] : []),
+  ].map(([v, l]) => `<div class="stat"><span class="num">${v}</span><span class="lab">${l}</span></div>`).join("");
+  // leak table
+  const fam = {};
+  for (const x of judged) { const k = famOf(x.d.res.sp); const f = fam[k] || (fam[k] = { n: 0, bad: 0, loose: 0, tight: 0 }); f.n++; if (x.d.res.verdict === "bad" || x.d.res.verdict === "close") { if (x.d.res.verdict === "bad") f.bad++; if (x.d.res.dir === "loose") f.loose++; if (x.d.res.dir === "tight") f.tight++; } }
+  const fk0 = Object.keys(fam).sort((a, b) => (fam[b].bad + fam[b].loose + fam[b].tight) - (fam[a].bad + fam[a].loose + fam[a].tight) || fam[b].n - fam[a].n);
+  const fk = fk0;
+  $("cLeaks").innerHTML = fk.length ? fk.map(k => { const f = fam[k]; const lean = !(f.loose + f.tight) ? `<span class="okp">sauber</span>` : f.loose > f.tight ? `<span class="loss">eher zu weit</span>` : f.tight > f.loose ? `<span class="loss">eher zu eng</span>` : "gemischt";
+    return `<tr><td>${k}</td><td class="num">${f.n}</td><td class="num">${f.bad}</td><td class="num">${f.loose}</td><td class="num">${f.tight}</td><td>${lean}</td></tr>`; }).join("") : `<tr><td colspan="6" class="muted">Noch keine bewertbaren Entscheidungen.</td></tr>`;
+  // hands table
+  let rows = decs;
+  if (sessC.onlyErr) rows = rows.filter(x => x.d.res && !x.d.res.skip && ["bad", "close", "gto"].includes(x.d.res.verdict));
+  const sev = x => !x.d.res || x.d.res.skip ? 9 : ({ bad: 0, close: 1, gto: 2, exploit: 3, good: 4 })[x.d.res.verdict] ?? 5;
+  rows = [...rows].sort((a, b) => sev(a) - sev(b) || String(a.hd.time).localeCompare(String(b.hd.time)));
+  const tb = $("cBody"); tb.replaceChildren();
+  if (!rows.length) { tb.innerHTML = `<tr><td colspan="9">${sessC.onlyErr ? "Keine Fehler gefunden. Schalte „Nur Fehler“ aus, um alle Entscheidungen zu sehen." : "Keine Entscheidungen."}</td></tr>`; return; }
+  for (const x of rows.slice(0, 500)) {
+    const { hd, d } = x, r = d.res, tr = document.createElement("tr"), cp = parseCards(hd.cards);
+    const when = hd.time ? hd.time.slice(0, 5) : (hd.file || "").slice(0, 16);
+    const cards = cp ? cardsHtml(cp.cs) : "";
+    if (!r || r.skip) tr.innerHTML = `<td class="mono">${when}</td><td>${hd.heroPos || ""}</td><td><span class="cardsview">${cards}</span></td><td colspan="5" class="muted">${r ? r.skip : "nicht bewertet"}</td><td class="num">${hd.src === "hh" ? CBB(hd.net) : ""}</td>`;
+    else {
+      const v = r.verdict, vt = !v ? `<span class="muted">offen</span>` : v === "good" ? `<span class="okp">richtig</span>` : v === "exploit" ? `<span class="okp">Exploit</span>` : v === "gto" ? `<span class="warnp">GTO, Exploit verpasst</span>` : v === "close" ? `<span class="warnp">knapp</span>` : `<span class="loss">Fehler</span>`;
+      tr.innerHTML = `<td class="mono">${when}</td><td>${hd.heroPos}</td><td><span class="cardsview">${cards}</span></td><td>${r.sp.title}</td><td>${r.act ? cashActText(r, r.act, r.actTo) : "—"}</td><td>${cashActText(r, r.gto)}${r.border ? ` <span class="muted">(knapp)</span>` : ""}</td><td>${cashActText(r, r.exA)}</td><td>${vt}</td><td class="num mono">${hd.src === "hh" ? (hd.net >= 0 ? "+" : "−") + CBB(Math.abs(hd.net)) : ""}</td>`;
+      tr.className = "clickrow"; tr.tabIndex = 0;
+      const key = hd.id + ":" + d.k;
+      const toggle = () => { sessC.open = sessC.open === key ? null : key; renderCashSession(); };
+      tr.onclick = toggle; tr.onkeydown = ev => { if (ev.key === "Enter") toggle(); };
+      tb.appendChild(tr);
+      if (sessC.open === key) {
+        const dt = document.createElement("tr"); dt.className = "cdetail"; const td = document.createElement("td"); td.colSpan = 9;
+        td.innerHTML = `<div class="cdet">${cashResultHtml(r)}${hd.streets ? cashLineHtml(hd.streets, hd.heroPos) : ""}<div class="minis cminis"></div></div>`;
+        cashMinis(td.querySelector(".cminis"), r);
+        dt.appendChild(td); tb.appendChild(dt);
+      }
+      continue;
+    }
+    tb.appendChild(tr);
+  }
+}
+$("cOnlyErr").addEventListener("change", e => { sessC.onlyErr = e.target.checked; renderCashSession(); });
+
+// ================= Hand review: Rush & Cash screenshot =================
+const rvc = { raw: null, S: null, vtype: "pool", act: null, cards: "" };
+function setRvMode(mode) {
+  const cash = mode === "cash";
+  $("cashShot").hidden = !cash;
+  for (const id of ["handForm", "rvSummary", "rvLines", "rvMinis", "rvMethod"]) $(id).hidden = cash;
+  if (cash) { $("rvUnsupported").hidden = true; $("verdict").hidden = true; }
+}
+function showCashShot(raw) {
+  rvc.raw = raw; rvc.S = cashSeatsFromRaw(raw); rvc.act = null; rvc.cards = raw.hero_cards || "";
+  setRvMode("cash"); renderCashShot();
+}
+function renderCashShot() {
+  const el = $("cashShot"), S = rvc.S, raw = rvc.raw;
+  if (!S) { el.innerHTML = `<div class="unsupported">6-max-Tisch erkannt, aber Dealer-Button und Blinds nicht. Ohne sie lassen sich die Positionen nicht bestimmen.</div>`; return; }
+  const post = (raw.board || 0) >= 3;
+  const { acts, notes } = cashSnapshotActs(S);
+  const ctx = post ? null : CASH.classify(acts, S.heroPos, S.n);
+  const h = handIdxOf(rvc.cards), eff = cashEff(S);
+  const res = post ? null : h == null ? { skip: "Deine Karten wurden nicht erkannt. Trag sie oben ein." } : CASH.evaluate(ctx, h, rvc.act ? { t: rvc.act } : null, rvc.vtype, eff);
+  if (res && !res.skip) res.notes.push(...S.notes, ...notes);
+  const cp = parseCards(rvc.cards);
+  let html = `<div class="rv-summary"><span class="spotname">${post ? "Postflop-Spot" : res && res.sp ? res.sp.title : "Rush & Cash"}</span><span>Rush &amp; Cash · ${S.n} Spieler</span><span>Du: <b>${S.heroPos}</b></span><span>Effektiv <b>${CBB(eff)} BB</b></span>${raw.pot != null ? `<span>Pot <b>${CBB(raw.pot)} BB</b></span>` : ""}</div>`;
+  html += `<div class="crow"><label class="field" for="cashCards">Deine Karten<input id="cashCards" type="text" maxlength="12" value="${rvc.cards}" placeholder="z. B. AhJd"></label><span class="cardsview">${cp ? cardsHtml(cp.cs) : ""}</span></div>`;
+  html += `<div class="row"><h3>Exploit gegen</h3><div class="vtype" id="cashVt"></div></div>`;
+  if (post) {
+    const bc = (raw.board_cards || []).filter(Boolean);
+    html += `<div class="unsupported">Postflop (${bc.length ? `Board ${bc.map(c => c[0] + SUITS[c[1]]).join(" ")}` : `${raw.board} Boardkarten`}). Die Postflop-Bewertung kommt mit dem Solver im nächsten Schritt. Für Preflop lade einen Screenshot von deiner Preflop-Entscheidung.</div>`;
+  } else html += cashResultHtml(res, { actButtons: true });
+  html += cashLineHtml([{ name: "Preflop bis zu dir", board: [], pot: null, acts }], S.heroPos);
+  html += `<div class="minis" id="cashShotMinis"></div><p class="fine">Referenz-Ranges für 6-max mit 100 BB, Opens auf 2,5 BB (SB 3 BB), mit Rake. Sie sind aus veröffentlichten Solver-Lösungen abgeleitet und vereinfacht (keine gemischten Frequenzen), nicht selbst berechnet. Die Gegnertypen sind Annahmen.</p>`;
+  el.innerHTML = html;
+  cashTypeBtns($("cashVt"), rvc.vtype, id => { rvc.vtype = id; renderCashShot(); });
+  $("cashCards").addEventListener("change", e => { rvc.cards = e.target.value; renderCashShot(); });
+  el.querySelectorAll("[data-cact]").forEach(b => b.onclick = () => { rvc.act = rvc.act === b.dataset.cact ? null : b.dataset.cact; renderCashShot(); });
+  if (res && !res.skip) cashMinis($("cashShotMinis"), res);
+}
+
+// ================= Video review: Rush & Cash hand tracker =================
+const ct = { hand: null, vtype: "pool", cand: null, ver: 0 };
+const STREETS = ["Preflop", "Flop", "Turn", "River"];
+const ctPot = H => H.streets.reduce((a, s) => a + Object.values(s.com).reduce((x, y) => x + y, 0), 0);
+function ctNewHand(S, cards, t) {
+  const slots = S.seats.map(s => ({ pos: s.pos, ang: s.ang, hero: s.hero, start: s.stack + s.bet, stack: s.stack, folded: !s.cards && !s.hero, miss: 0, pend: null, allin: false }));
+  const H = { id: "v" + Math.round(t * 1000), cards, t0: t, n: S.n, heroPos: S.heroPos, order: S.order, slots, street: 0, dec: null, decs: [], notes: S.notes.slice(), ver: 0, heroFolded: false,
+    streets: [{ name: "Preflop", board: [], pot: 0, acts: [], com: {}, max: 1, last: "BB" }] };
+  for (const sl of slots) H.streets[0].com[sl.pos] = sl.pos === "SB" ? .5 : sl.pos === "BB" ? 1 : 0;
+  for (const sl of slots) if (sl.folded) H.streets[0].acts.push({ pos: sl.pos, t: "fold" });
+  return H;
+}
+function ctOrder(H) { const st = H.streets[H.street]; const base = H.street === 0 ? H.order : CASH.POST_ORDER.filter(p => H.slots.some(s => s.pos === p)); const i = base.indexOf(st.last); return i < 0 ? base : [...base.slice(i + 1), ...base.slice(0, i + 1)]; }
+function ctAct(H, pos, t, to, extra) {
+  const st = H.streets[H.street], a = Object.assign({ pos, t, to }, extra || {});
+  if (t === "raise" || t === "bet" || t === "call") {
+    if (t !== "call" && H.street > 0 && st.max === 0) { // implied checks before the first bet
+      const ord = CASH.POST_ORDER.filter(p => H.slots.some(s => s.pos === p && !s.folded));
+      for (const p of ord) { if (p === pos) break; if (!st.acts.some(x => x.pos === p)) st.acts.push({ pos: p, t: "check", est: true }); }
+      a.t = "bet"; a.pct = st.pot > 0 ? to / st.pot * 100 : null;
+    }
+    st.com[pos] = to; if (to > st.max) st.max = to; st.last = pos;
+  } else if (t === "fold" || t === "check") { st.last = pos; }
+  st.acts.push(a); H.ver++; ct.ver++;
+  if (pos === H.heroPos && H.dec && !H.dec.act && H.dec.street === H.street) ctResolve(H, { t: H.street === 0 && a.t === "bet" ? "raise" : a.t, to: a.to });
+  else if (pos !== H.heroPos && H.dec && !H.dec.act && H.dec.street === H.street && H.dec.toCall < .01 && H.street > 0 && (a.t === "bet" || a.t === "raise")) ctResolve(H, { t: "check" });
+}
+function ctResolve(H, act) {
+  const d = H.dec; if (!d || d.act) return; d.act = act;
+  if (d.street === 0 && d.ctx) d.res = CASH.evaluate(d.ctx, d.h, act, ct.vtype, d.eff);
+  H.dec = null; ct.ver++;
+}
+function ctCommit(H, vals) { // vals: [{pos, v, allin}] committed in action order
+  const ord = ctOrder(H);
+  vals.sort((a, b) => ord.indexOf(a.pos) - ord.indexOf(b.pos));
+  for (const x of vals) {
+    const st = H.streets[H.street], sl = H.slots.find(s => s.pos === x.pos);
+    sl.pend = null; if (x.allin) sl.allin = true;
+    if (x.v > st.max + .01) ctAct(H, x.pos, H.street > 0 && st.max === 0 ? "bet" : "raise", x.v, { allin: x.allin });
+    else ctAct(H, x.pos, "call", x.v, { allin: x.allin });
+  }
+}
+function ctFlush(H) { const v = H.slots.filter(s => s.pend && !s.folded).map(s => ({ pos: s.pos, v: s.pend.v, allin: s.stack <= .05 })); if (v.length) ctCommit(H, v); }
+function ctCloseStreet(H) {
+  ctFlush(H);
+  const st = H.streets[H.street];
+  const live = H.slots.filter(s => !s.folded && !s.allin);
+  for (const sl of live) if ((st.com[sl.pos] || 0) < st.max - .01) ctAct(H, sl.pos, "call", st.max, { est: true });
+  if (H.dec && !H.dec.act && H.dec.street === H.street) ctResolve(H, { t: H.dec.toCall < .01 ? "check" : "call", est: true });
+}
+function ctFinish(H) {
+  if (!H) return;
+  ctFlush(H);
+  if (H.dec && !H.dec.act) ctResolve(H, { t: H.dec.toCall < .01 ? "check" : "fold" });
+  // fast fold: the hero left the hand before it was his turn
+  if (!H.decs.length && H.street === 0 && !H.heroActed) {
+    const st = H.streets[0], acts = st.acts.filter(a => a.pos !== H.heroPos).map(a => ({ pos: a.pos, t: a.t === "bet" ? "raise" : a.t, to: a.to }));
+    const h = handIdxOf(H.cards), ctx = CASH.classify(acts, H.heroPos, H.n);
+    if (h != null && !ctx.none) {
+      const d = { t: H.t0, street: 0, ctx, h, eff: ctEff(H), ff: true, act: { t: "fold" } };
+      d.res = CASH.evaluate(ctx, h, d.act, ct.vtype, d.eff);
+      if (d.res && !d.res.skip) { d.res.notes.push("Fast-Fold vor deinem Zug: bewertet mit dem, was bis dahin passiert war."); H.decs.push(d); vr.spots.push({ cash: true, t: H.t0, H, d }); }
+    }
+  }
+  H.done = true; ct.ver++;
+}
+function ctEff(H) { const hs = H.slots.find(s => s.hero), opp = H.slots.filter(s => !s.hero && !s.folded).map(s => s.start); return opp.length ? Math.min(hs.start, Math.max(...opp)) : hs.start; }
+function ctMatch(H, s) { if (s.hero) return H.slots.find(x => x.hero); let best = null, bd = 30; for (const sl of H.slots) { if (sl.hero) continue; const d = Math.abs(((s.ang - sl.ang + 540) % 360) - 180); if (d < bd) { bd = d; best = sl; } } return best; }
+function cashFrame(raw, t, manual) {
+  vr.game = "cash";
+  const S = cashSeatsFromRaw(raw);
+  const cards = raw.hero_cards;
+  let H = ct.hand;
+  if (cards && (!H || H.cards !== cards)) {
+    if (!S) { vLive("6-max-Tisch: Dealer-Button nicht erkannt"); return; }
+    ct.cand = ct.cand && ct.cand.cards === cards ? { cards, n: ct.cand.n + 1 } : { cards, n: 1 };
+    if (!H || ct.cand.n >= 2 || manual || raw.buttons) { const had = H && vr.spots.length; ctFinish(H); H = ct.hand = ctNewHand(S, cards, t); ct.cand = null; if (had !== vr.spots.length) renderTimeline(); }
+  }
+  if (!H) { vLive("Rush & Cash erkannt · warte auf deine Karten"); return; }
+  if (H.done) { vLive("Warte auf die nächste Hand"); return; }
+  const cur = {}; for (const s of (raw.seats || [])) { if (typeof s.ang !== "number") continue; const sl = ctMatch(H, s); if (sl) cur[sl.pos] = { stack: s.stack, bet: s.bet || 0, cards: s.cards !== false }; }
+  // hero left the hand (Rush & Cash moves you to a new table right after a fold)
+  if (!cards) { H.noCards = (H.noCards || 0) + 1; if (H.noCards >= 3 && !H.heroFolded) { H.heroFolded = true; if (H.dec && !H.dec.act) ctResolve(H, { t: "fold" }); ctAct(H, H.heroPos, "fold"); } }
+  else H.noCards = 0;
+  // street
+  const bc = raw.board || 0, sIdx = bc >= 5 ? 3 : bc >= 4 ? 2 : bc >= 3 ? 1 : 0;
+  if (sIdx > H.street && sIdx <= 3) {
+    ctCloseStreet(H);
+    while (H.street < sIdx) { const pot = ctPot(H); H.street++; H.streets.push({ name: STREETS[H.street], board: [], pot, acts: [], com: {}, max: 0, last: CASH.POST_ORDER.filter(p => H.slots.some(s => s.pos === p)).slice(-1)[0] }); }
+    for (const sl of H.slots) sl.pend = null;
+  }
+  const st = H.streets[H.street];
+  if (H.street > 0 && raw.board_cards && raw.board_cards.length) { const nb = raw.board_cards; if (nb.filter(Boolean).length >= st.board.filter(Boolean).length) { st.board = nb.slice(); H.ver++; } }
+  // folds (two frames without cards)
+  for (const sl of H.slots) { if (sl.hero || sl.folded) continue; const s = cur[sl.pos]; if (!s) continue;
+    if (!s.cards) { sl.miss++; if (sl.miss >= 2) { sl.folded = true; ctAct(H, sl.pos, "fold"); } } else sl.miss = 0; }
+  // bets
+  const decision = !!(raw.buttons && cards);
+  const vals = [];
+  const heroDone = H.heroFolded || H.streets[0].acts.some(a => a.pos === H.heroPos), hOrd = H.order.indexOf(H.heroPos);
+  for (const sl of H.slots) { if (sl.folded) continue; const s = cur[sl.pos]; if (!s) continue; sl.stack = s.stack;
+    if (H.street === 0 && !sl.hero && !heroDone && H.order.indexOf(sl.pos) > hOrd) continue; // cannot have acted before the hero's first action
+    const b = s.bet || 0, have = st.com[sl.pos] || 0;
+    if (b > have + .01) { if (sl.pend && Math.abs(sl.pend.v - b) < .01) sl.pend.n++; else sl.pend = { v: b, n: 1 }; if (sl.pend.n >= 2 || decision) vals.push({ pos: sl.pos, v: b, allin: s.stack <= .05 }); }
+    else sl.pend = null; }
+  if (vals.length) ctCommit(H, vals);
+  if (H.slots.find(s => s.hero).pend === null && st.acts.some(a => a.pos === H.heroPos && a.t !== "fold")) H.heroActed = true;
+  // the hero is to act
+  if (decision) {
+    const hc = st.com[H.heroPos] || 0, key = `${H.street}|${st.max}|${hc}`;
+    if (!H.decs.some(d => d.key === key)) {
+      if (H.dec && !H.dec.act) ctResolve(H, { t: H.dec.toCall < .01 ? "check" : "call", est: true });
+      const d = { key, t, street: H.street, toCall: Math.max(0, st.max - hc), h: handIdxOf(cards), eff: ctEff(H), act: null };
+      if (H.street === 0) {
+        const acts = st.acts.map(a => ({ pos: a.pos, t: a.t === "bet" ? "raise" : a.t, to: a.to }));
+        d.ctx = CASH.classify(acts, H.heroPos, H.n);
+        d.res = d.h == null ? { skip: "Karten nicht erkannt" } : CASH.evaluate(d.ctx, d.h, null, ct.vtype, d.eff);
+      } else d.post = { pot: ctPot(H), toCall: d.toCall, board: st.board.slice() };
+      H.decs.push(d); H.dec = d; H.heroActed = true;
+      const sp = { cash: true, t, H, d }; vr.spots.push(sp); vr.cur = sp;
+      renderVPanel(sp); renderTimeline();
+      vLive(`Entscheidung bei ${tFmt(t)} erkannt`, true);
+      if (!vr.cam && $("vPause").checked && !manual && d.res && !d.res.skip) vid.pause();
+      return;
+    }
+    vLive("Du bist am Zug", true);
+  } else {
+    const info = `${H.heroPos} · ${STREETS[H.street]}${H.street ? " · Pot " + CBB(ctPot(H)) + " BB" : ""}`;
+    vLive(manual ? `Rush & Cash erkannt: ${info}` : `Läuft · ${info}`);
+  }
+  if (vr.cur && vr.cur.cash && vr.cur.H === H && vr.lastVer !== ct.ver) { vr.lastVer = ct.ver; renderVPanel(vr.cur); renderTimeline(); }
+}
+function ctReeval() {
+  for (const sp of vr.spots) if (sp.cash && sp.d.ctx && sp.d.h != null) { sp.d.res = CASH.evaluate(sp.d.ctx, sp.d.h, sp.d.act, ct.vtype, sp.d.eff); if (sp.d.ff && sp.d.res && !sp.d.res.skip) sp.d.res.notes.push("Fast-Fold vor deinem Zug: bewertet mit dem, was bis dahin passiert war."); }
+  renderVPanel(vr.cur); renderTimeline();
+}
+function ctStreets(H) { return H.streets.map(s => ({ name: s.name, board: s.board, pot: s.name === "Preflop" ? null : s.pot, acts: s.acts.concat(s.name !== "Preflop" && !s.acts.length && H.streets[H.streets.indexOf(s) + 1] ? [{ pos: "alle", t: "check" }] : []) })); }
+function renderCashPanel(sp) {
+  const el = $("vPanel"), H = sp.H, d = sp.d, cp = parseCards(H.cards);
+  const title = d.street === 0 ? (d.res && d.res.sp ? d.res.sp.title : "Preflop") : `${STREETS[d.street]}-Entscheidung`;
+  let h = `<div class="vp-head"><span class="vp-time">${tFmt(sp.t)}</span><span class="vp-spot">${title}</span></div>`;
+  h += `<div class="vp-meta"><span class="cardsview">${cp ? cardsHtml(cp.cs) : ""}</span><span>${H.heroPos}</span><span>Effektiv ${CBB(d.eff)} BB</span>${d.ff ? `<span>Fast-Fold</span>` : ""}</div>`;
+  if (d.street === 0) h += cashResultHtml(d.res, { actButtons: !d.ff, auto: true });
+  else { const p = d.post; h += `<div class="vp-line"><h3>${STREETS[d.street]} · Pot ${CBB(p.pot)} BB</h3><div class="ev">${p.toCall > .01 ? `Zu callen: ${CBB(p.toCall)} BB (${Math.round(p.toCall / p.pot * 100)} % vom Pot)` : "Du kannst checken oder setzen."}${d.act ? ` · Gespielt: ${ACT_DE[d.act.t] || d.act.t}${d.act.to ? " " + CBB(d.act.to) + " BB" : ""}` : ""}</div><p class="cnote">Postflop wird noch nicht bewertet; das kommt mit dem Solver im nächsten Schritt. Die Line wird schon mitgeschrieben.</p></div>`; }
+  h += cashLineHtml(ctStreets(H), H.heroPos);
+  el.innerHTML = h;
+  el.querySelectorAll("[data-cact]").forEach(b => b.onclick = () => { const a = b.dataset.cact; d.act = { t: a }; d.res = CASH.evaluate(d.ctx, d.h, d.act, ct.vtype, d.eff); if (H.dec === d) H.dec = null; renderCashPanel(sp); renderTimeline(); });
+}
+function cashTimelineRow(sp, tr) {
+  const d = sp.d, H = sp.H, cp = parseCards(H.cards), r = d.res;
+  const cards = cp ? cardsHtml(cp.cs) : "";
+  if (d.street > 0) { tr.innerHTML = `<td class="mono">${tFmt(sp.t)}</td><td>${STREETS[d.street]} · Pot ${CBB(d.post.pot)} BB</td><td><span class="cardsview">${cards}</span></td><td class="mono">${H.heroPos}</td><td colspan="2" class="muted">Postflop folgt</td><td>${d.act ? ACT_DE[d.act.t] || d.act.t : "—"}</td><td class="muted">Line</td>`; return; }
+  if (!r || r.skip) { tr.innerHTML = `<td class="mono">${tFmt(sp.t)}</td><td colspan="7" class="muted">${r && r.skip ? r.skip : "nicht bewertet"}</td>`; return; }
+  const v = r.verdict, vt = !d.act ? `<span class="muted">offen</span>` : v === "good" ? `<span class="okp">richtig</span>` : v === "exploit" ? `<span class="okp">Exploit</span>` : v === "gto" ? `<span class="warnp">Exploit verpasst</span>` : v === "close" ? `<span class="warnp">knapp</span>` : `<span class="loss">Fehler</span>`;
+  tr.innerHTML = `<td class="mono">${tFmt(sp.t)}</td><td>${r.sp.title}</td><td><span class="cardsview">${cards}</span></td><td class="mono">${H.heroPos} · ${CBB(d.eff)}</td><td>${cashActText(r, r.gto)}</td><td>${cashActText(r, r.exA)}</td><td>${d.act ? cashActText(r, d.act.t === "allin" ? "raise" : d.act.t, d.act.to) : "—"}</td><td>${vt}</td>`;
+}
+
+// ================= Range charts: Rush & Cash =================
+const cc = { game: "spin", kind: "rfi", hero: "CO", vill: null, vtype: "reg", hand: "", cmp: false };
+const CC_KINDS = [["rfi", "Open"], ["vsopen", "Gegen Open"], ["vs3b", "Gegen 3-Bet"], ["vs4b", "Gegen 4-Bet"]];
+function ccHeroes(k) { return k === "rfi" ? ["UTG", "HJ", "CO", "BTN", "SB"] : k === "vsopen" ? ["HJ", "CO", "BTN", "SB", "BB"] : k === "vs3b" ? ["UTG", "HJ", "CO", "BTN", "SB"] : ["HJ", "CO", "BTN", "SB", "BB"]; }
+function ccVills(k, hero) { const P = CASH.POS6, i = P.indexOf(hero); return k === "vsopen" || k === "vs4b" ? P.slice(0, i) : k === "vs3b" ? (hero === "SB" ? ["BB"] : P.slice(i + 1)) : []; }
+function renderCashCharts() {
+  $("chartGame").innerHTML = [["spin", "Spin & Gold"], ["cash", "Rush & Cash"]].map(([v, l]) => `<button type="button" class="btn" data-cg="${v}" aria-pressed="${cc.game === v}">${l}</button>`).join("");
+  $("chartGame").querySelectorAll("[data-cg]").forEach(b => b.onclick = () => { cc.game = b.dataset.cg; renderCashCharts(); });
+  $("spinCharts").hidden = cc.game !== "spin"; $("cashCharts").hidden = cc.game !== "cash";
+  if (cc.game !== "cash") return;
+  const seg = (id, opts, cur, set) => { $(id).innerHTML = opts.map(([v, l]) => `<button type="button" class="btn" data-v="${v}" aria-pressed="${v === cur}">${l}</button>`).join(""); $(id).querySelectorAll("[data-v]").forEach(b => b.onclick = () => { set(b.dataset.v); renderCashCharts(); }); };
+  if (!ccHeroes(cc.kind).includes(cc.hero)) cc.hero = ccHeroes(cc.kind)[2] || ccHeroes(cc.kind)[0];
+  const vills = ccVills(cc.kind, cc.hero); if (vills.length && !vills.includes(cc.vill)) cc.vill = cc.kind === "vs3b" ? vills[vills.length - 1] : vills[vills.length - 1];
+  seg("ccKind", CC_KINDS, cc.kind, v => { cc.kind = v; });
+  seg("ccHero", ccHeroes(cc.kind).map(p => [p, p]), cc.hero, v => { cc.hero = v; });
+  $("ccVillRow").hidden = !vills.length; $("ccVillLab").textContent = cc.kind === "vsopen" ? "Opener" : cc.kind === "vs3b" ? "3-Bettor" : "4-Bettor (Opener)";
+  if (vills.length) seg("ccVill", vills.map(p => [p, p]), cc.vill, v => { cc.vill = v; });
+  cashTypeBtns($("ccVt"), cc.vtype, id => { cc.vtype = id; renderCashCharts(); });
+  const o = CASH.spotFor(cc.kind, cc.hero, vills.length ? cc.vill : null, cc.vtype);
+  if (!o) { $("ccTitle").textContent = "Keine Referenz für diese Kombination"; $("ccGrid").replaceChildren(); return; }
+  const show = cc.vtype === "reg" ? o.sp : o.ex, hi = handIdxOf(cc.hand) ?? (() => { const R = (() => { try { return CASH.parse(cc.hand); } catch (e) { return null; } })(); return R ? R.findIndex(v => v > 0) : null; })();
+  $("ccTitle").textContent = o.sp.title + (cc.vtype !== "reg" ? ` · Exploit gegen ${o.vt.label}` : "");
+  $("ccBadge").textContent = o.sp.approx ? "Faustregel" : "Referenz";
+  cashGrid($("ccGrid"), show, hi >= 0 ? hi : null, cc.cmp && cc.vtype !== "reg" ? o.sp : null);
+  $("ccLegend").innerHTML = cashLegend(o.sp);
+  $("ccCmpWrap").hidden = cc.vtype === "reg";
+  const pr = CASH.pctOf(show.r), pc = CASH.pctOf(show.c), pb = CASH.pctOf(show.b);
+  $("ccStats").innerHTML = [[fmt(pr.toFixed(1)) + " %", o.sp.raiseName + (o.sp.size ? ` auf ${CBB(o.sp.size)} BB` : "")], ...(pc > 0 ? [[fmt(pc.toFixed(1)) + " %", o.sp.checkable ? "Check" : "Call"]] : []), [fmt((100 - pr - pc).toFixed(1)) + " %", o.sp.checkable ? "Check" : "Fold"], ...(pb > 0 ? [[fmt(pb.toFixed(1)) + " %", "davon Bluff"]] : [])]
+    .map(([v, l]) => `<div class="stat"><span class="num">${v}</span><span class="lab">${l}</span></div>`).join("");
+  const val = show.r.map((v, i) => v > 0 && !(show.b[i] > 0) ? 1 : 0);
+  let nt = `<div class="nots"><b>${o.sp.raiseName} Value</b><span class="mono">${notation(val)}</span>`;
+  if (pb > 0) nt += `<b>${o.sp.raiseName} Bluff</b><span class="mono">${notation(show.b)}</span>`;
+  if (pc > 0) nt += `<b>Call</b><span class="mono">${notation(show.c)}</span>`;
+  $("ccNots").innerHTML = nt + "</div>";
+  let note = cc.vtype === "reg" ? "Vereinfachte Referenz (keine gemischten Frequenzen) für 100 BB mit Rake." : o.vt.desc + " Die Anpassung verschiebt die Grenzen der Range; sie ist eine Annahme, keine Berechnung.";
+  if (hi != null && hi >= 0) { const a = CASH.actOf(show, hi); note = `<b>${handName(hi)}:</b> ${a === "raise" ? o.sp.raiseName + (show.b[hi] > 0 ? " (als Bluff)" : "") : a === "call" ? "Call" : a === "check" ? "Check" : "Fold"}. ` + note; }
+  $("ccNote").innerHTML = note;
+}
+$("ccHand").addEventListener("input", e => { cc.hand = e.target.value.trim(); renderCashCharts(); });
+$("ccCmp").addEventListener("change", e => { cc.cmp = e.target.checked; renderCashCharts(); });
+
+vid.addEventListener("seeked", () => { ct.hand = null; ct.cand = null; });
+
 setExample();
 renderReview();
+renderCashCharts();
 
 </script>
 
