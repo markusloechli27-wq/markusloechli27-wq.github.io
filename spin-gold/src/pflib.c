@@ -1,6 +1,6 @@
 // pflib.c — computes flop-library entries on a Raspberry Pi (or any Linux/Mac) for the poker review app.
 // Build: gcc -O3 -march=native -o pflib pflib.c -lm      (pfsolve.c must be in the same folder)
-// Run:   ./pflib pi-auftrag.txt <part> <parts> ergebnis-<part>.jsonl
+// Run:   ./pflib pi-auftrag.txt <part> <parts> ergebnis-<part>.jsonl [other result files whose flops count as done]
 // The job file comes from the app ("Pi-Auftrag erstellen"); the result file is imported in the app.
 // Resumes automatically: flops already in the result file are skipped.
 #define NATIVE
@@ -95,14 +95,16 @@ int main(int argc, char **argv) {
   int part = atoi(argv[2]), parts = atoi(argv[3]);
   if (read_job(argv[1]) || !NT) { fprintf(stderr, "no tasks\n"); return 1; }
   // already done (resume)
-  char **keys = 0; int nk = 0, ck = 0; FILE *in = fopen(argv[4], "r");
-  if (in) { char *ln = 0; size_t cap = 0; ssize_t len;
+  // flops already in the result file (or in other result files named after it) are skipped
+  char **keys = 0; int nk = 0, ck = 0;
+  for (int a = 4; a < argc; a++) { FILE *in = fopen(argv[a], "r"); if (!in) continue;
+    char *ln = 0; size_t cap = 0; ssize_t len;
     while ((len = getline(&ln, &cap, in)) > 0) { char *k = strstr(ln, "\"key\":\""); if (!k) continue; k += 7; char *e = strchr(k, '"'); if (!e || ln[len - 1] != '\n') continue; *e = 0;
       if (nk == ck) { ck = ck ? 2 * ck : 256; keys = realloc(keys, sizeof(char *) * ck); } keys[nk++] = strdup(k); }
     free(ln); fclose(in); }
   FILE *out = fopen(argv[4], "a"); if (!out) { perror(argv[4]); return 1; }
-  int mine = 0; for (int i = 0; i < NT; i++) if (i % parts == part) mine++;
-  fprintf(stderr, "Teil %d/%d: %d Flops, %d schon fertig\n", part + 1, parts, mine, nk);
+  int mine = 0, have = 0; for (int i = 0; i < NT; i++) if (i % parts == part) { mine++; char key[64]; snprintf(key, sizeof key, "%s|normal|%s", SP[TASKS[i].spot].id, TASKS[i].flop); have += done_has(keys, nk, key); }
+  fprintf(stderr, "Teil %d/%d: %d Flops, %d schon fertig\n", part + 1, parts, mine, have);
   int done = 0; double t0 = now_ms();
   for (int i = 0; i < NT; i++) {
     if (i % parts != part) continue;
