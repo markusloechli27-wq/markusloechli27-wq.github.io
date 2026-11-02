@@ -67,7 +67,8 @@ fi
 gcc -O3 -march=native -o pflib pflib.c -lm 2>/dev/null || { echo "Kompilieren fehlgeschlagen. Einmal ausführen: sudo apt install -y build-essential"; exit 1; }
 i=0
 while [ $i -lt "$N" ]; do
-  nohup nice -n 19 ./pflib pi-auftrag.txt $i "$N" ergebnis-$i.jsonl ergebnis-*.jsonl > log-$i.txt 2>&1 &
+  # lowest CPU priority; if memory ever runs out, the kernel stops the solver first, never Jarvis or other services
+  nohup sh -c 'echo 1000 > /proc/self/oom_score_adj 2>/dev/null; exec nice -n 19 ./pflib "$@"' pflib pi-auftrag.txt $i "$N" ergebnis-$i.jsonl ergebnis-*.jsonl > log-$i.txt 2>&1 &
   i=$((i + 1))
 done
 echo "$N Rechnungen gestartet. Stand ansehen: cd ~/flops && sh pi-rechnen.sh status"
