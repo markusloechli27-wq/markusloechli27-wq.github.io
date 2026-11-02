@@ -315,6 +315,18 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
 @media (max-width: 880px) { .pf-top { grid-template-columns: minmax(0, 1fr); } }
 .pf-card { justify-items: stretch; grid-template-columns: minmax(0, 1fr); min-width: 0; }
 .pf-card > *, .pf-top > * { min-width: 0; max-width: 100%; }
+.pf-lib { grid-column: 1 / -1; }
+.libst { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.librow { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; background: var(--surface); min-width: 0; }
+.libtop { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.libtop strong { font-family: var(--font-display); font-size: 20px; }
+.libtop .btn { margin-left: auto; }
+.libtop .okp { margin-left: auto; }
+.libspots { font-size: 13px; color: var(--muted); }
+.libbar { height: 6px; border-radius: 999px; background: var(--cell); overflow: hidden; }
+.libbar i { display: block; height: 100%; background: var(--call); }
+.libnum { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.libcount { font-family: var(--font-body); font-size: 14px; font-weight: 500; margin-left: 8px; }
 .pf-card .frow { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
 .pf-card .field { flex: 1 1 110px; min-width: 0; }
 .pf-card .field.wide { flex: 2 1 200px; }
@@ -544,6 +556,20 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
         <span class="sub">Löst einen River und einen Turn komplett und rechnet hoch, wie lange ein Flop und eine Bibliothek mit 300 Flops auf diesem Gerät dauern würden.</span>
         <div class="row-btns"><button class="btn primary" type="button" id="pfBench">Test starten</button><button class="btn" type="button" id="pfBenchFlop" hidden>Flop echt testen</button></div>
         <div id="pfBenchOut"></div>
+      </div>
+      <div class="drop pf-card pf-lib">
+        <b>Flop-Bibliothek <span class="muted libcount" id="libCount"></span></b>
+        <span class="sub">Rechnet die wichtigsten Rush &amp; Cash-Spots über Nacht auf diesem Gerät vor. Im Video-Review kommen Flop-Entscheidungen dann sofort aus der Bibliothek, und Turn und River löst die App mit eingeengten Ranges in rund einer Sekunde. Stufe 1 und 2 nehmen 184 repräsentative Flops, Stufe 3 und 4 alle 1.755. Live gelöste Flops wandern automatisch mit hinein.</span>
+        <div id="libOut"></div>
+        <p class="cnote">So geht es über Nacht: Web-App vom Home-Bildschirm öffnen, iPhone ans Ladekabel, Stufe starten, App offen lassen. Der Bildschirm bleibt an (Helligkeit ganz runterdrehen); kühl und ohne Hülle rechnet es schneller. „Pause“ und später „Rechnen“ macht dort weiter, wo es aufgehört hat.</p>
+        <div class="row-btns">
+          <button class="btn" type="button" id="libExportBtn">Bibliothek exportieren</button>
+          <button class="btn" type="button" id="libImportBtn">Importieren</button>
+          <button class="btn" type="button" id="libPiJobBtn">Pi-Auftrag erstellen</button>
+          <button class="btn" type="button" id="libPiProgBtn">Pi-Programm laden</button>
+        </div>
+        <input type="file" id="libImportIn" multiple accept=".jsonl,.txt,application/json,text/plain" hidden>
+        <p class="cnote" id="libMsg" hidden></p>
       </div>
     </div>
     <div class="status" id="pfStatus" hidden><i class="spinner" id="pfSpin"></i><span id="pfStatusText"></span></div>
@@ -3187,7 +3213,8 @@ function cashFrame(raw, t, manual) {
   }
   const st = H.streets[H.street];
   if (H.street > 0 && raw.board_cards && raw.board_cards.length) { const nb = raw.board_cards; if (nb.filter(Boolean).length >= st.board.filter(Boolean).length) { st.board = nb.slice(); H.ver++; } }
-  if (H.street > 0 && !H.lvJob && !H.heroFolded && H.streets[1].board.filter(Boolean).length >= 3) lvStart(H);
+  if (H.street > 0 && !H.lvStarted && !H.heroFolded && H.streets[1].board.filter(Boolean).length >= 3) lvStart(H);
+  if (H.street > 1 && !H.turnJob && !H.heroFolded && H.streets[2].board.filter(Boolean).length >= 4) lvTurnStart(H);
   // folds (two frames without cards)
   for (const sl of H.slots) { if (sl.hero || sl.folded) continue; const s = cur[sl.pos]; if (!s) continue;
     if (!s.cards) { sl.miss++; if (sl.miss >= 2) { sl.folded = true; ctAct(H, sl.pos, "fold"); } } else sl.miss = 0; }
@@ -3215,7 +3242,7 @@ function cashFrame(raw, t, manual) {
       } else {
         d.post = { pot: ctPot(H), toCall: d.toCall, board: st.board.slice() };
         d.snap = H.streets.slice(1, H.street + 1).map(x => ({ acts: x.acts.map(a => Object.assign({}, a)), board: x.board.slice() }));
-        if (!H.lvJob) lvStart(H);
+        if (!H.lvStarted) lvStart(H);
         lvNeed(H, d);
       }
       H.decs.push(d); H.dec = d; H.heroActed = true;
@@ -3669,38 +3696,71 @@ function lvStatusText(job) {
   if (!job) return "";
   if (job.status === "skip") return job.msg;
   if (job.status === "wait") { const k = lv.queue.indexOf(job); return `Solver: in der Warteschlange${k >= 0 && (lv.queue.length > 1 || lv.running) ? ` (Platz ${k + 1 + (lv.running ? 1 : 0)})` : ""} …`; }
-  if (job.status === "solving") return `Solver rechnet diesen Flop … ${job.iter ? `Iteration ${job.iter}, Abweichung ${fmt(job.expl.toFixed(1))} % · ` : ""}${fmt(Math.round((performance.now() - job.t0s) / 1000))} s`;
+  if (job.status === "prep") return "Solver bereitet den Turn vor …";
+  if (job.status === "solving") return `Solver rechnet ${job.kind === "turn" ? "den Turn" : "diesen Flop"} … ${job.iter ? `Iteration ${job.iter}, Abweichung ${fmt(job.expl.toFixed(1))} % · ` : ""}${fmt(Math.round((performance.now() - job.t0s) / 1000))} s`;
   if (job.status === "evicted") return "Der Baum dieser Hand wurde für einen anderen Tisch freigemacht und wird bei Bedarf neu gerechnet.";
   if (job.status === "ready") return `Solver fertig in ${fmt(Math.round(job.ms / 1000))} s (Abweichung ${fmt(job.expl.toFixed(2))} % vom Pot).`;
   if (job.status === "replaced") return "Die Lösung dieser Hand wurde durch eine neuere ersetzt.";
   return job.msg || "Solver nicht verfügbar.";
 }
 // start solving the flop of a tracked hand (called by the tracker once the flop is read)
-function lvStart(H) {
-  if (H.lvJob || lv.tree === "off") return;
+function lvMakeFlopJob(H, low) {
   const board = (H.streets[1] && H.streets[1].board || []).slice(0, 3);
-  if (board.filter(Boolean).length < 3) return;
-  const job = H.lvJob = { H, status: "wait", cache: new Map(), t0: performance.now() };
+  const job = { H, kind: "flop", status: "wait", cache: new Map(), t0: performance.now(), low: !!low };
   const R = pfRangesFromLine(H.streets[0].acts);
-  if (!R) { job.status = "skip"; job.msg = "Postflop: Nur Single-Raised- und 3-Bet-Pots heads-up werden gelöst."; return; }
+  if (!R) { job.status = "skip"; job.msg = "Postflop: Nur Single-Raised- und 3-Bet-Pots heads-up werden gelöst."; return job; }
   const pos = Object.keys(R).filter(k => k !== "kind" && k !== "note"); const [a, b] = pos;
-  if (!pos.includes(H.heroPos)) { job.status = "skip"; job.msg = "Du bist nicht in der Hand."; return; }
+  if (!pos.includes(H.heroPos)) { job.status = "skip"; job.msg = "Du bist nicht in der Hand."; return job; }
   job.oopPos = CASH.ipOf(a, b) ? b : a; job.ipPos = job.oopPos === a ? b : a; job.note = R.note || "";
   const starts = {}; for (const sl of H.slots) starts[sl.pos] = sl.start;
   const stack = pfStackAt(starts, H.streets.map(st => ({ acts: st.acts })), 1, a, b);
   const pre = H.streets[0].acts.filter(x => x.t === "raise" || x.t === "bet"), aggr = pre.length ? pre[pre.length - 1].pos : job.ipPos;
-  const cfg = pfConfig({ oopR: R[job.oopPos], ipR: R[job.ipPos], board: board.map(pfCard), pot: H.streets[1].pot, stack: Math.max(1, stack), sizes: pfFlopSizes(lv.tree, aggr === job.oopPos) });
-  if (cfg.board.some(c => c < 0)) { job.status = "skip"; job.msg = "Flop nicht sicher erkannt."; return; }
-  job.cfg = cfg; job.board = board;
-  lv.queue.push(job); lvRefresh(H); lvPump();
+  const real = board.map(pfCard);
+  if (real.some(c => c < 0)) { job.status = "skip"; job.msg = "Flop nicht sicher erkannt."; return job; }
+  const cn = LF.canon(real); // solve the canonical flop: same strategies up to suits, and the result can go into the library
+  job.perm = cn.perm; job.flopKey = cn.key; job.spot = libSpotOf(H.streets[0].acts);
+  job.cfg = pfConfig({ oopR: R[job.oopPos], ipR: R[job.ipPos], board: cn.cards, pot: H.streets[1].pot, stack: Math.max(1, stack), sizes: pfFlopSizes(lv.tree, aggr === job.oopPos) });
+  job.board = board; job.stack = stack;
+  return job;
 }
-// one solver tree fits in memory: jobs run one after another, tables with an open decision first
+// called by the tracker once the flop is read: library first, a full flop solve only when needed
+async function lvStart(H) {
+  if (H.lvStarted || lv.tree === "off") return;
+  const board = (H.streets[1] && H.streets[1].board || []).slice(0, 3);
+  if (board.filter(Boolean).length < 3) return;
+  H.lvStarted = true;
+  if (!lib.loaded) await libLoadIndex();
+  const spot = libSpotOf(H.streets[0].acts), real = board.map(pfCard);
+  const inLib = spot && lib.index.get(spot) && !real.some(c => c < 0) ? LF.nearest(real, lib.index.get(spot)) : null;
+  H.libNear = inLib;
+  if (inLib && inLib.exact && lv.tree === LIB_TREE) { H.lvJob = { H, kind: "flop", status: "lib", msg: "Flop aus der Bibliothek." }; lvRefresh(H); return; }
+  const job = H.lvJob = lvMakeFlopJob(H, !!inLib);
+  if (job.status === "wait") { lv.queue.push(job); lvPump(); }
+  lvRefresh(H);
+}
+// the turn is out: solve turn + river with ranges narrowed by the library's flop strategies (about a second)
+async function lvTurnStart(H) {
+  if (H.turnJob || lv.tree === "off" || !H.streets[2]) return;
+  const tb = H.streets[2].board || []; if (tb.filter(Boolean).length < 4) return;
+  if (H.lvJob && H.lvJob.kind === "flop" && !H.lvJob.low && ["wait", "solving", "ready"].includes(H.lvJob.status)) return; // the full flop tree will cover the turn
+  H.turnJob = { H, kind: "turn", status: "prep", cache: new Map(), t0: performance.now() };
+  const nw = await libTurnWeights(H);
+  if (!nw) { H.turnJob.status = "skip"; H.turnJob.msg = "Für den Turn fehlt die Flop-Lösung in der Bibliothek."; lvRefresh(H); return; }
+  const starts = {}; for (const sl of H.slots) starts[sl.pos] = sl.start;
+  const stack = pfStackAt(starts, H.streets.map(st => ({ acts: st.acts })), 2, nw.oopPos, nw.ipPos);
+  const cards = tb.slice(0, 4).map(pfCard); if (cards.some(c => c < 0)) { H.turnJob.status = "skip"; H.turnJob.msg = "Turn-Karte nicht sicher erkannt."; return; }
+  const cfg = pfConfig({ oopR: new Float32Array(169), ipR: new Float32Array(169), board: cards, pot: H.streets[2].pot, stack: Math.max(1, stack), sizes: PF_DEFAULT_SIZES[1] });
+  cfg.w0 = nw.w[0]; cfg.w1 = nw.w[1];
+  Object.assign(H.turnJob, { status: "wait", cfg, oopPos: nw.oopPos, ipPos: nw.ipPos, board: tb.slice(0, 4), note: nw.exact ? "Ranges am Turn aus der Bibliothek eingeengt." : "Ranges am Turn über einen ähnlichen Flop der Bibliothek eingeengt (Näherung)." });
+  lv.queue.push(H.turnJob); lvPump(); lvRefresh(H);
+}
+// one solver tree fits in memory: jobs run one after another; open decisions first, quick turn solves before slow flops
 function lvPump() {
-  if (lv.running || pfs.busy) return;
+  if (lv.running || pfs.busy || lib.busy) return;
   lv.queue = lv.queue.filter(j => j.status === "wait");
   if (!lv.queue.length) return;
-  const open = j => j.H.decs.some(d => d.street > 0 && !d.sol) ? 1 : 0;
-  lv.queue.sort((x, y) => (open(y) - open(x)) || (x.t0 - y.t0));
+  const score = j => (j.H.decs.some(d => d.street > 0 && !d.sol && (j.kind === "turn" ? d.street >= 2 : true)) ? 10 : 0) + (j.kind === "turn" ? 5 : 0) - (j.low ? 8 : 0);
+  lv.queue.sort((x, y) => (score(y) - score(x)) || (x.t0 - y.t0));
   lvRun(lv.queue.shift());
 }
 function lvRun(job) {
@@ -3713,20 +3773,26 @@ function lvRun(job) {
     try {
       const su = await PF.call({ cmd: "setup", cfg: job.cfg, maxBytes: 1.6e9 });
       if (!su.ok) { job.status = "failed"; job.msg = `Postflop: zu wenig Speicher (${fmt(Math.round(su.bytes / 1e6))} MB). Stell den Baum auf „schnell“.`; return; }
-      const res = await PF.call({ cmd: "run", maxIter: 120, target: 1, every: 10 }, pr => { job.iter = pr.iter; job.expl = pr.expl; if (performance.now() - (job.lastPaint || 0) > 900) { job.lastPaint = performance.now(); lvRefresh(H); } });
+      const res = await PF.call({ cmd: "run", maxIter: job.kind === "turn" ? 300 : 120, target: job.kind === "turn" ? .7 : 1, every: 10 }, pr => { job.iter = pr.iter; job.expl = pr.expl; if (performance.now() - (job.lastPaint || 0) > 900) { job.lastPaint = performance.now(); lvRefresh(H); } });
       if (res.stopped) { job.status = "wait"; lv.queue.push(job); return; }
       job.ms = res.ms; job.expl = res.expl; job.iter = res.iter;
       if (!job.hands) { const hs = await PF.call({ cmd: "hands" });
         job.hands = { h: hs.h, w: hs.w, cls: hs.h.map(arr => { const o = new Int16Array(arr.length / 2); for (let i = 0; i < o.length; i++) o[i] = pfClassOf(arr[2 * i], arr[2 * i + 1]); return o; }) }; }
-      job.status = "ready"; lv.resident = job; job.solves = (job.solves || 0) + 1;
-      for (const d of H.decs) if (d.street > 0 && !d.sol) await lvEval(H, d);
+      job.status = "ready"; lv.resident = job; job.solves = (job.solves || 0) + 1; lv.running = null; // the tree is ready to be read
+      // a live flop solve with library settings goes into the library as well
+      if (job.kind === "flop" && job.spot && lv.tree === LIB_TREE && !libHas(job.spot, job.flopKey)) { const sp = libSpotPreset(job.spot);
+        if (sp && Math.abs(job.cfg.pot - sp.pot) <= .2 * sp.pot && Math.abs(job.cfg.stack - sp.stack) <= .15 * sp.stack) { try { await libStore(job.spot, job.flopKey, job.cfg, job.hands, res, "live"); libRender(); } catch (e) {} } }
+      for (const d of H.decs) if (d.street > 0 && (!d.sol || d.sol.src === "lib")) await lvEval(H, d);
     } catch (e) { if (job.status === "solving") { job.status = "failed"; job.msg = e && e.error === "mem" ? "Postflop: zu wenig Speicher." : "Postflop: Solver-Fehler."; } }
     finally { if (lv.running === job) lv.running = null; lvRefresh(H); lvPump(); }
   })();
 }
+const lvJobFor = (H, d) => d.street >= 2 && H.turnJob && H.turnJob.status !== "skip" && !(H.lvJob && H.lvJob.kind === "flop" && !H.lvJob.low && ["ready", "evicted", "wait", "solving"].includes(H.lvJob.status)) ? H.turnJob : H.lvJob;
 // a decision needs the tree of its hand
 function lvNeed(H, d) {
-  const job = H.lvJob; if (!job) return;
+  if (d.street === 1 && !d.sol) libDecision(H, d).then(ok => { if (ok) lvRefresh(H); });
+  if (d.street >= 2 && !H.turnJob) lvTurnStart(H);
+  const job = lvJobFor(H, d); if (!job) return;
   if (job.status === "ready" && lv.resident === job && !lv.running) lvEval(H, d).then(() => lvRefresh(H));
   else if (job.status === "evicted") { job.status = "wait"; lv.queue.push(job); lvPump(); }
   else lvPump();
@@ -3744,27 +3810,28 @@ function lvPick(n, a) { // child index of the tree node that matches a tracked a
   const c = n.children[best], off = a.to ? Math.abs(c.amt - a.to) / Math.max(a.to, 1) : 0;
   return { k: best, note: off > .3 ? `Einsatz ${pfFmt(a.to)} BB, im Baum nächste Größe ${pfFmt(c.amt)} BB` : "" };
 }
-async function lvPath(job, snap, upto) { // follow the tracked line through the solved tree
+const lvMapCard = (job, c) => c >= 0 && job.perm ? (c >> 2) * 4 + job.perm[c & 3] : c;
+async function lvPath(job, snap, upto) { // follow the tracked line through the solved tree (snap starts at the job's street)
   let node = 0; const reach = [job.hands.w[0].slice(), job.hands.w[1].slice()], notes = [], steps = [];
-  const label0 = `Flop ${job.board.map(c => c[0] + SUITS[c[1]]).join(" ")}`;
-  steps.push({ node: 0, reach: [reach[0].slice(), reach[1].slice()], label: label0 });
+  const base = job.cfg.board.length - 1;
+  steps.push({ node: 0, reach: [reach[0].slice(), reach[1].slice()], label: `${["Flop", "Turn", "River"][base - 2]} ${job.board.map(c => c[0] + SUITS[c[1]]).join(" ")}` });
   const apply = (n, k, p) => { const H = job.hands.h[p].length / 2; for (let h = 0; h < H; h++) reach[p][h] *= n.strat[k * H + h]; };
   for (let si = 0; si < snap.length; si++) {
     const st = snap[si];
     if (si > 0) {
       const n = await lvNode(job, node); if (n.type !== 1) return { fail: "Die Line passt nicht zum Baum (Straße zu früh zu Ende)." };
-      const cs = st.board[2 + si], card = cs ? pfCard(cs) : -1, ch = n.children.find(c => c.card === card);
-      if (!ch) return { fail: `${si === 1 ? "Turn" : "River"}-Karte nicht erkannt.` };
+      const cs = st.board[base + si], card = lvMapCard(job, cs ? pfCard(cs) : -1), ch = n.children.find(c => c.card === card);
+      if (!ch) return { fail: `${base + si === 3 ? "Turn" : "River"}-Karte nicht erkannt.` };
       for (let p = 0; p < 2; p++) { const hc = job.hands.h[p]; for (let h = 0; h < hc.length / 2; h++) if (hc[2 * h] === card || hc[2 * h + 1] === card) reach[p][h] = 0; }
-      node = ch.node; steps.push({ node, reach: [reach[0].slice(), reach[1].slice()], label: `${si === 1 ? "Turn" : "River"} ${cs[0]}${SUITS[cs[1]]}` });
+      node = ch.node; steps.push({ node, reach: [reach[0].slice(), reach[1].slice()], label: `${base + si === 3 ? "Turn" : "River"} ${cs[0]}${SUITS[cs[1]]}` });
     }
     const acts = si === snap.length - 1 && upto != null ? st.acts.slice(0, upto) : st.acts;
     for (const a of acts) {
       const p = a.pos === job.oopPos ? 0 : a.pos === job.ipPos ? 1 : -1; if (p < 0) continue;
       let n = await lvNode(job, node);
-      if (n.type === 0 && n.player !== p) { const ck = n.children.findIndex(c => c.type === 1); if (ck < 0) return { fail: "Die Line passt nicht zum Baum." }; apply(n, ck, n.player); node = n.children[ck].node; steps.push({ node, reach: [reach[0].slice(), reach[1].slice()], label: `${pfs.names[n.player] || ""} Check` }); n = await lvNode(job, node); }
+      if (n.type === 0 && n.player !== p) { const ck = n.children.findIndex(c => c.type === 1); if (ck < 0) return { fail: "Die Line passt nicht zum Baum." }; apply(n, ck, n.player); node = n.children[ck].node; steps.push({ node, reach: [reach[0].slice(), reach[1].slice()], label: `${n.player ? job.ipPos : job.oopPos} Check` }); n = await lvNode(job, node); }
       if (n.type !== 0) return { fail: "Die Line passt nicht zum Baum." };
-      const m = lvPick(n, a); if (m.k < 0) return { fail: a.t === "bet" && si === 0 ? `${a.pos} setzt am Flop, das ist im Baum „${({ fast: "schnell", normal: "normal", wide: "breit" })[lv.tree]}“ nicht vorgesehen (Baum „breit“ wählen).` : "Diese Aktion gibt es im Baum nicht." };
+      const m = lvPick(n, a); if (m.k < 0) return { fail: a.t === "bet" && base === 2 && si === 0 ? `${a.pos} setzt am Flop, das ist im Baum „${({ fast: "schnell", normal: "normal", wide: "breit" })[lv.tree]}“ nicht vorgesehen (Baum „breit“ wählen).` : "Diese Aktion gibt es im Baum nicht." };
       if (m.note) notes.push(m.note);
       apply(n, m.k, p); node = n.children[m.k].node;
       steps.push({ node, reach: [reach[0].slice(), reach[1].slice()], label: `${a.pos} ${pfActLabel(n, n.children[m.k], job.cfg)}` });
@@ -3773,35 +3840,32 @@ async function lvPath(job, snap, upto) { // follow the tracked line through the 
   return { node, reach, notes, steps };
 }
 async function lvEval(H, d) {
-  const job = H.lvJob; if (!job || job.status !== "ready" || lv.resident !== job || lv.running || !d.snap) return;
-  const saveNames = pfs.names; pfs.names = [job.oopPos, job.ipPos];
+  const job = lvJobFor(H, d); if (!job || job.status !== "ready" || lv.resident !== job || lv.running || !d.snap) return;
   try {
-    const path = await lvPath(job, d.snap);
-    if (path.fail) { d.sol = { fail: path.fail }; return; }
+    const snap = job.kind === "turn" ? d.snap.slice(1) : d.snap;
+    const path = await lvPath(job, snap);
+    if (path.fail) { if (!d.sol || d.sol.src !== "lib") d.sol = { fail: path.fail }; return; }
     const hp = H.heroPos === job.oopPos ? 0 : 1;
     let n = await lvNode(job, path.node);
-    // the hero has the buttons, so an opponent who has not acted on this street has checked
     if (n.type === 0 && n.player !== hp) { const ck = n.children.findIndex(c => c.type === 1);
       if (ck >= 0) { const Hn = job.hands.h[n.player].length / 2; for (let h = 0; h < Hn; h++) path.reach[n.player][h] *= n.strat[ck * Hn + h];
         path.node = n.children[ck].node; path.steps.push({ node: path.node, reach: [path.reach[0].slice(), path.reach[1].slice()], label: `${n.player ? job.ipPos : job.oopPos} Check` }); n = await lvNode(job, path.node); } }
     if (n.type !== 0 || n.player !== hp) { d.sol = { fail: "Die Line passt nicht zum Baum (du bist laut Baum nicht am Zug)." }; return; }
-    const cs = parseCards(H.cards); const c1 = cs ? pfCard(cs.cs[0].r + cs.cs[0].s) : -1, c2 = cs ? pfCard(cs.cs[1].r + cs.cs[1].s) : -1;
+    const cs = parseCards(H.cards); const c1 = cs ? lvMapCard(job, pfCard(cs.cs[0].r + cs.cs[0].s)) : -1, c2 = cs ? lvMapCard(job, pfCard(cs.cs[1].r + cs.cs[1].s)) : -1;
     const lo = Math.min(c1, c2), hi = Math.max(c1, c2), hc = job.hands.h[hp], NHp = hc.length / 2;
     let hidx = -1; for (let i = 0; i < NHp; i++) if (hc[2 * i] === lo && hc[2 * i + 1] === hi) { hidx = i; break; }
     const vals = await PF.call({ cmd: "values", node: path.node, player: hp, reach: path.reach[1 - hp] });
     const pot = job.cfg.pot + n.c0 + n.c1;
     const items = n.children.map((c, k) => ({ label: pfActLabel(n, c, job.cfg), type: c.type, amt: c.amt, freq: hidx >= 0 ? n.strat[k * NHp + hidx] : null, ev: hidx >= 0 && vals.values ? vals.values[k * NHp + hidx] : null }));
-    // range-wide frequencies (how often the whole range takes each action here)
     const r = path.reach[hp]; let tot = 0; for (let h = 0; h < NHp; h++) tot += r[h];
     items.forEach((it, k) => { let s = 0; for (let h = 0; h < NHp; h++) s += r[h] * n.strat[k * NHp + h]; it.range = tot > 0 ? s / tot : 0; });
     let best = -1; items.forEach((it, k) => { if (it.ev != null && (best < 0 || it.ev > items[best].ev)) best = k; });
-    d.sol = { items, best, inRange: hidx >= 0, pot, notes: path.notes, steps: path.steps, node: path.node, n, hp };
+    d.sol = { items, best, inRange: hidx >= 0, pot, notes: path.notes, steps: path.steps, node: path.node, n, hp, src: job.kind, job };
     lvVerdict(d);
   } catch (e) { d.sol = { fail: "Auswertung fehlgeschlagen." }; }
-  finally { pfs.names = saveNames; }
 }
 function lvVerdict(d) {
-  const s = d.sol; if (!s || s.fail || !d.act || !s.inRange) return;
+  const s = d.sol; if (!s || s.fail || !d.act || !s.inRange || s.best < 0) return;
   const a = { t: d.act.t === "raise" ? (s.n.children.some(c => c.type === 3) ? "bet" : "raise") : d.act.t, to: d.act.to };
   const m = lvPick(s.n, a); if (m.k < 0) { s.verdict = null; return; }
   const it = s.items[m.k], bestEv = s.items[s.best].ev, loss = Math.max(0, bestEv - it.ev);
@@ -3809,33 +3873,35 @@ function lvVerdict(d) {
   s.verdict = it.freq >= .25 || loss <= .02 * s.pot ? "good" : loss <= .06 * s.pot ? "close" : "bad";
 }
 function lvBlockHtml(H, d) {
-  const job = H.lvJob;
+  const job = lvJobFor(H, d), s = d.sol;
   let h = `<div class="lv">`;
-  if (!job) h += `<p class="cnote">${lv.tree === "off" ? "Postflop-Solver ist ausgeschaltet." : "Für diese Hand wurde der Flop nicht vollständig erkannt; der Solver startet nur mit drei sicher gelesenen Flop-Karten."}</p>`;
-  else if (job.status !== "ready" || !d.sol) h += `<p class="cnote">${lvStatusText(job)}</p>`;
-  else if (d.sol.fail) h += `<p class="cnote">${d.sol.fail}</p>`;
+  if (!s && !job) h += `<p class="cnote">${lv.tree === "off" ? "Postflop-Solver ist ausgeschaltet." : "Für diese Hand wurde der Flop nicht vollständig erkannt; der Solver startet nur mit drei sicher gelesenen Flop-Karten."}</p>`;
+  else if (!s) h += `<p class="cnote">${job.status === "lib" ? "Suche in der Bibliothek …" : lvStatusText(job)}</p>`;
+  else if (s.fail) h += `<p class="cnote">${s.fail}</p>`;
   else {
-    const s = d.sol, cp = parseCards(H.cards);
+    const cp = parseCards(H.cards);
     h += `<h3>GTO für ${cp ? cardsHtml(cp.cs) : "deine Hand"}</h3>`;
-    if (!s.inRange) h += `<p class="cnote">Deine Hand ist nicht in der angenommenen Range. Unten steht, wie die ganze Range hier spielt.</p>`;
-    h += `<div class="lv-acts">${s.items.map((it, k) => `<div class="lv-act${k === s.best ? " best" : ""}${k === s.heroK ? " mine" : ""}"><span>${it.label}</span>${it.freq != null ? `<b>${Math.round(it.freq * 100)} %</b>` : ""}${it.ev != null && s.best >= 0 ? `<em>${k === s.best ? "beste" : s.items[s.best].ev - it.ev < .05 ? "gleich gut" : "−" + pfFmt(s.items[s.best].ev - it.ev) + " BB"}</em>` : ""}<small>Range ${Math.round(it.range * 100)} %</small></div>`).join("")}</div>`;
+    if (s.src === "lib") h += `<p class="cnote">${s.exact ? "Aus der Bibliothek, genau dieser Flop." : `Aus der Bibliothek, Näherung über den ähnlichen Flop ${s.libFlop.match(/../g).map(x => x[0] + SUITS[x[1]]).join(" ")}.${job && ["wait", "solving"].includes(job.status) ? " Die genaue Lösung rechnet im Hintergrund." : ""}`}</p>`;
+    if (!s.inRange) h += `<p class="cnote">Deine Hand ist nicht in der angenommenen Range.${s.items.some(it => it.range != null) ? " Unten steht, wie die ganze Range hier spielt." : ""}</p>`;
+    h += `<div class="lv-acts">${s.items.map((it, k) => `<div class="lv-act${k === s.best ? " best" : ""}${k === s.heroK ? " mine" : ""}"><span>${it.label}</span>${it.freq != null ? `<b>${Math.round(it.freq * 100)} %</b>` : ""}${it.ev != null && s.best >= 0 ? `<em>${k === s.best ? "beste" : s.items[s.best].ev - it.ev < .05 ? "gleich gut" : "−" + pfFmt(s.items[s.best].ev - it.ev) + " BB"}</em>` : ""}${it.range != null ? `<small>Range ${Math.round(it.range * 100)} %</small>` : ""}</div>`).join("")}</div>`;
     if (s.verdict) { const it = s.items[s.heroK], lbl = it.label;
       h += `<div class="vp-verdict ${s.verdict === "good" ? "good" : s.verdict === "close" ? "mixed" : "bad"}"><b>${lbl}: ${s.verdict === "good" ? "richtig" : s.verdict === "close" ? "knapp" : "Fehler"}</b><span>${s.verdict === "good" ? (s.loss > .005 ? `Kostet nur ${pfFmt(s.loss)} BB gegenüber der besten Option.` : "Das spielt der Solver hier auch.") : `Kostet etwa ${pfFmt(s.loss)} BB. Besser: ${s.items[s.best].label}.`}${s.heroNote ? " " + s.heroNote + "." : ""}</span></div>`; }
-    if (s.notes.length) h += `<p class="cnote">${[...new Set(s.notes)].join(". ")}.</p>`;
-    h += `<p class="cnote">Ranges aus der Preflop-Referenz, Baum „${({ fast: "schnell", normal: "normal", wide: "breit" })[lv.tree] || lv.tree}“. ${job.note || ""} Abweichung vom Gleichgewicht ${fmt(job.expl.toFixed(1))} % vom Pot.</p>`;
-    h += `<div class="row-btns"><button type="button" class="btn" id="lvOpen">Ganze Range im Solver ansehen</button></div>`;
+    if (s.notes && s.notes.length) h += `<p class="cnote">${[...new Set(s.notes)].join(". ")}.</p>`;
+    if (s.src !== "lib" && s.job) h += `<p class="cnote">${s.job.kind === "turn" ? s.job.note : `Ranges aus der Preflop-Referenz, Baum „${({ fast: "schnell", normal: "normal", wide: "breit" })[lv.tree] || lv.tree}“. ${s.job.note || ""}`} Abweichung vom Gleichgewicht ${fmt((s.job.expl || 0).toFixed(1))} % vom Pot.</p>`;
+    if (s.src !== "lib") h += `<div class="row-btns"><button type="button" class="btn" id="lvOpen">Ganze Range im Solver ansehen</button></div>`;
   }
   return h + `</div>`;
 }
 function lvOpenInSolver(H, d) {
-  const job = H.lvJob, s = d.sol; if (!job || job.status !== "ready" || !s || s.fail) return;
+  const s = d.sol, job = s && s.job; if (!job || job.status !== "ready" || !s || s.fail) return;
   if (lv.resident !== job || lv.running) { lvNeed(H, d); return; }
   pfs.liveJob = job;
   pfs.result = { cfg: job.cfg, sp: { oopPos: job.oopPos, ipPos: job.ipPos }, board: job.cfg.board };
   pfs.hands = job.hands; pfs.cache = job.cache; pfs.names = [job.oopPos, job.ipPos];
   pfs.stack = s.steps.map(x => ({ node: x.node, reach: x.reach, label: x.label }));
-  pfStatus("ok", `Lösung aus dem Video-Review: ${H.heroPos}, ${H.cards}. ${lvStatusText(job)}`);
-  $("pfResult").hidden = false; $("pfHand").value = H.cards;
+  pfStatus("ok", `Lösung aus dem Video-Review: ${H.heroPos}, ${H.cards}. ${lvStatusText(job)}${job.perm ? " Die Farben sind im Solver vertauscht dargestellt (gleiche Strategie)." : ""}`);
+  const cs = parseCards(H.cards);
+  $("pfResult").hidden = false; $("pfHand").value = cs ? cs.cs.map(x => pfCardStr(lvMapCard(job, pfCard(x.r + x.s)))).join("") : "";
   setView("solver"); try { history.replaceState(null, "", "#solver"); } catch (e) {} window.scrollTo({ top: 0 });
   pfRenderNode();
 }
@@ -3922,6 +3988,407 @@ function mtBar() {
 }
 $("vLayout").addEventListener("change", e => { mt.mode = e.target.value; mtReset(); });
 vid.addEventListener("seeked", () => { vr.tables = []; mt.checkedAt = -1e9; });
+
+// ================= Flop library: flop classes, order, similarity =================
+// cards: rank*4 + suit, rank 0 = deuce .. 12 = ace, suits c d h s
+const LF = (() => {
+  const PERMS = []; (function gen(a, used) { if (a.length === 4) { PERMS.push(a.slice()); return; } for (let s = 0; s < 4; s++) if (!used[s]) { used[s] = 1; a.push(s); gen(a, used); a.pop(); used[s] = 0; } })([], [0, 0, 0, 0]);
+  const R = "23456789TJQKA", S = "cdhs";
+  const cardStr = c => R[c >> 2] + S[c & 3];
+  const keyOf = cs => cs.map(cardStr).join("");
+  // canonical form: the suit relabelling that gives the smallest sorted (descending) card triple
+  function canon(cards) {
+    let best = null, bestPerm = null;
+    for (const p of PERMS) {
+      const t = cards.map(c => (c >> 2) * 4 + p[c & 3]).sort((x, y) => y - x);
+      const v = t[0] * 2704 + t[1] * 52 + t[2];
+      if (best === null || v < best.v) { best = { v, t }; bestPerm = p; }
+    }
+    return { cards: best.t, key: keyOf(best.t), perm: bestPerm };
+  }
+  let ALL = null;
+  function all() { // 1,755 classes with their weight (number of real flops)
+    if (ALL) return ALL;
+    const m = new Map();
+    for (let a = 0; a < 52; a++) for (let b = a + 1; b < 52; b++) for (let c = b + 1; c < 52; c++) {
+      const k = canon([a, b, c]); const e = m.get(k.key); if (e) e.w++; else m.set(k.key, { key: k.key, cards: k.cards, w: 1 });
+    }
+    ALL = [...m.values()]; ALL.forEach(f => { f.f = feat(f.cards); });
+    return ALL;
+  }
+  function feat(cs) {
+    const r = cs.map(c => c >> 2).sort((x, y) => y - x), s = cs.map(c => c & 3);
+    const pair = r[0] === r[2] ? 2 : (r[0] === r[1] || r[1] === r[2]) ? 1 : 0;
+    const ns = new Set(s).size;
+    // which two cards (by rank order) share a suit on a two-tone flop
+    const byRank = cs.slice().sort((x, y) => (y >> 2) - (x >> 2)), ss = byRank.map(c => c & 3);
+    const tt = ns === 2 ? (ss[0] === ss[1] ? 0 : ss[0] === ss[2] ? 1 : 2) : -1;
+    const lowA = r[0] === 12 ? Math.min(r[0] - r[2], r[1] + 1) : r[0] - r[2];
+    return { r, pair, ns, tt, spread: lowA };
+  }
+  function dist(f, g) {
+    return 4 * Math.abs(f.r[0] - g.r[0]) + 3 * Math.abs(f.r[1] - g.r[1]) + 2 * Math.abs(f.r[2] - g.r[2]) + 1.5 * Math.abs(Math.min(f.spread, 8) - Math.min(g.spread, 8))
+      + (f.pair !== g.pair ? 60 : 0) + (f.ns !== g.ns ? 30 : (f.ns === 2 && f.tt !== g.tt ? 10 : 0));
+  }
+  let ORDER = null;
+  function order() { // representative order: greedy weighted farthest-point selection, so any prefix covers the flop space
+    if (ORDER) return ORDER;
+    const A = all(), n = A.length, md = new Float64Array(n).fill(1e9), taken = new Uint8Array(n), out = [];
+    let cur = A.findIndex(f => f.key === canon([11 * 4, 5 * 4 + 1, 0 * 4 + 2]).key); // K72 rainbow first
+    for (let k = 0; k < n; k++) {
+      taken[cur] = 1; out.push(A[cur]);
+      let best = -1, bv = -1;
+      for (let i = 0; i < n; i++) { if (taken[i]) continue; const d = dist(A[cur].f, A[i].f); if (d < md[i]) md[i] = d; const v = md[i] * Math.pow(A[i].w / 24, .6); if (v > bv) { bv = v; best = i; } }
+      cur = best; if (cur < 0) break;
+    }
+    ORDER = out; return out;
+  }
+  function nearest(realCards, keys) { // keys: Set/array of canonical keys available
+    const c = canon(realCards), fF = feat(c.cards);
+    if (keys.has ? keys.has(c.key) : keys.includes(c.key)) return { key: c.key, exact: true, canon: c, d: 0 };
+    let best = null, bd = 1e9;
+    for (const k of keys) { const f = all().find(x => x.key === k); if (!f) continue; const d = dist(fF, f.f); if (d < bd) { bd = d; best = f; } }
+    return best ? { key: best.key, exact: false, canon: c, d: bd, lib: best } : null;
+  }
+  // map a real hole-card pair onto the library flop's card space (exact under isomorphism, approximate for a different flop)
+  // hole-card ranks keep their place relative to the board: overcard stays an overcard, a card between top and middle card stays there, …
+  function rankMapCat(fr, lr) {
+    const uf = [...new Set(fr)].sort((a, b) => b - a), ul = [...new Set(lr)].sort((a, b) => b - a);
+    if (uf.length !== ul.length) return null;
+    const bounds = u => { const iv = []; let hi = 12; for (const b of u) { const xs = []; for (let r = hi; r > b; r--) xs.push(r); iv.push(xs); hi = b - 1; } const xs = []; for (let r = hi; r >= 0; r--) xs.push(r); iv.push(xs); return iv; };
+    const If = bounds(uf), Il = bounds(ul);
+    return x => {
+      const bi = uf.indexOf(x); if (bi >= 0) return ul[bi];
+      const k = If.findIndex(iv => iv.includes(x)), i = If[k].indexOf(x), n = If[k].length;
+      let kk = k; if (!Il[kk].length) { for (let d = 1; d < 5; d++) { if (Il[k + d] && Il[k + d].length) { kk = k + d; break; } if (Il[k - d] && Il[k - d].length) { kk = k - d; break; } } }
+      const L = Il[kk]; return L[Math.min(L.length - 1, Math.floor(i * L.length / n))];
+    };
+  }
+  function rankMap(fr, lr) { // fr, lr: board ranks sorted desc
+    const anchors = [[-1, -1]]; for (let i = 2; i >= 0; i--) anchors.push([fr[i], lr[i]]); anchors.push([13, 13]);
+    anchors.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    return x => {
+      for (let i = 0; i < anchors.length; i++) if (anchors[i][0] === x) return anchors[i][1];
+      let lo = anchors[0], hi = anchors[anchors.length - 1];
+      for (const a of anchors) { if (a[0] < x && a[0] >= lo[0]) lo = a; if (a[0] > x && a[0] <= hi[0]) hi = a; }
+      let y = Math.round(lo[1] + (x - lo[0]) * (hi[1] - lo[1]) / Math.max(1, hi[0] - lo[0]));
+      if (y <= lo[1] && hi[1] > lo[1] + 1) y = lo[1] + 1; if (y >= hi[1] && hi[1] - 1 > lo[1]) y = hi[1] - 1;
+      return Math.max(0, Math.min(12, y));
+    };
+  }
+  function mapper(realCards, libKey) {
+    const c = canon(realCards), L = all().find(f => f.key === libKey);
+    if (!L) return null;
+    const exact = c.key === libKey;
+    const fr = c.cards.map(x => x >> 2).sort((a, b) => b - a), lr = L.cards.map(x => x >> 2).sort((a, b) => b - a);
+    const rm = exact ? (x => x) : (rankMapCat(fr, lr) || rankMap(fr, lr));
+    const board = new Set(L.cards);
+    return {
+      exact, lib: L, perm: c.perm, board,
+      card(card) { return rm(card >> 2) * 4 + c.perm[card & 3]; },
+      combo(a, b) { // -> [a', b'] in library space, or null
+        let x = this.card(a), y = this.card(b);
+        if (!exact && (a >> 2) !== (b >> 2) && (x >> 2) === (y >> 2)) { // two different ranks collapsed into a pair: move the lower card one rank down
+          const lo = (a >> 2) < (b >> 2) ? 0 : 1, r = (x >> 2) - 1; if (r >= 0) { if (lo === 0) x = r * 4 + (x & 3); else y = r * 4 + (y & 3); } }
+        const fix = (z, other) => { if (!board.has(z) && z !== other) return z;
+          for (const d of [-1, 1, -2, 2]) { const r = (z >> 2) + d; if (r < 0 || r > 12) continue; const w = r * 4 + (z & 3); if (!board.has(w) && w !== other) return w; } // keep the suit (flush draws), move the rank
+          for (let s = 0; s < 4; s++) { const w = (z >> 2) * 4 + s; if (!board.has(w) && w !== other) return w; } return -1; };
+        x = fix(x, -1); if (x < 0) return null; y = fix(y, x); if (y < 0) return null;
+        return x < y ? [x, y] : [y, x];
+      },
+    };
+  }
+  const combo = (a, b) => { if (a > b) { const t = a; a = b; b = t; } return b * (b - 1) / 2 + a; };
+  return { canon, all, order, nearest, mapper, feat, dist, keyOf, cardStr, combo };
+})();
+
+
+// ================= Flop library: storage, overnight runner, lookup =================
+const LDB = (() => { // IndexedDB with an in-memory fallback (e.g. when storage is blocked)
+  let dbp = null; const mem = new Map(), memMeta = new Map(); let memOnly = false;
+  const open = () => dbp || (dbp = new Promise(res => {
+    try { const r = indexedDB.open("poker-review-lib", 1);
+      r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains("flops")) db.createObjectStore("flops", { keyPath: "key" }); if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta"); };
+      r.onsuccess = () => res(r.result); r.onerror = () => { memOnly = true; res(null); }; r.onblocked = () => { memOnly = true; res(null); };
+    } catch (e) { memOnly = true; res(null); }
+  }));
+  const req = (store, mode, fn) => open().then(db => new Promise((res, rej) => {
+    if (!db) { res(undefined); return; }
+    try { const t = db.transaction(store, mode), r = fn(t.objectStore(store)); t.oncomplete = () => res(r && "result" in r ? r.result : undefined); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); } catch (e) { rej(e); }
+  }));
+  return {
+    async put(rec) { if (memOnly || !(await open())) { mem.set(rec.key, rec); return; } await req("flops", "readwrite", s => s.put(rec)); },
+    async get(key) { if (memOnly || !(await open())) return mem.get(key); return req("flops", "readonly", s => s.get(key)); },
+    async keys() { if (memOnly || !(await open())) return [...mem.keys()]; return (await req("flops", "readonly", s => s.getAllKeys())) || []; },
+    async all() { if (memOnly || !(await open())) return [...mem.values()]; return (await req("flops", "readonly", s => s.getAll())) || []; },
+    async del(key) { if (memOnly || !(await open())) { mem.delete(key); return; } await req("flops", "readwrite", s => s.delete(key)); },
+    async meta(k, v) { if (memOnly || !(await open())) { if (v === undefined) return memMeta.get(k); memMeta.set(k, v); return; }
+      if (v === undefined) return req("meta", "readonly", s => s.get(k)); await req("meta", "readwrite", s => s.put(v, k)); },
+    persistent: () => !memOnly,
+  };
+})();
+const LIB_TREE = "normal";
+const LIB_STAGES = [
+  { id: 1, label: "Stufe 1", spots: ["btn_bb", "co_bb", "bb3_btn"], n: 184 },
+  { id: 2, label: "Stufe 2", spots: ["sb_bb", "hj_bb", "btn3_co"], n: 184 },
+  { id: 3, label: "Stufe 3", spots: ["btn_bb", "co_bb", "bb3_btn"], n: 1755 },
+  { id: 4, label: "Stufe 4", spots: ["sb_bb", "hj_bb", "btn3_co"], n: 1755 },
+];
+const lib = { index: new Map(), running: false, busy: false, stop: false, wake: null, rate: [], loaded: false, cur: null };
+const libKey = (spot, flop) => `${spot}|${LIB_TREE}|${flop}`;
+async function libLoadIndex() {
+  lib.index = new Map();
+  for (const k of await LDB.keys()) { const [spot, tree, flop] = String(k).split("|"); if (tree !== LIB_TREE) continue; if (!lib.index.has(spot)) lib.index.set(spot, new Set()); lib.index.get(spot).add(flop); }
+  lib.loaded = true;
+}
+const libHas = (spot, flop) => !!(lib.index.get(spot) && lib.index.get(spot).has(flop));
+function libTasks(stage) {
+  const out = [], flops = LF.order().slice(0, stage.n);
+  for (const f of flops) for (const s of stage.spots) if (!libHas(s, f.key)) out.push({ spot: s, flop: f });
+  return out;
+}
+function libStageDone(stage) { const flops = LF.order().slice(0, stage.n); let d = 0; for (const f of flops) for (const s of stage.spots) if (libHas(s, f.key)) d++; return d; }
+const libSpotPreset = id => PF_SPOTS.find(s => s.id === id);
+function libCfg(spotId, cards) {
+  const sp = libSpotPreset(spotId);
+  return pfConfig({ oopR: sp.oop(), ipR: sp.ip(), board: cards, pot: sp.pot, stack: sp.stack, sizes: pfFlopSizes(LIB_TREE, sp.aggr === "oop") });
+}
+// read every flop decision of the solved tree: strategy and EV of each action for each hand
+async function libExtract(hands) {
+  const nodes = [], q = [{ node: 0, path: "", reach: [hands.w[0].slice(), hands.w[1].slice()] }];
+  while (q.length) {
+    const it = q.shift(), n = await PF.call({ cmd: "node", node: it.node });
+    if (n.type !== 0) continue;
+    const p = n.player, H = hands.h[p].length / 2, na = n.children.length;
+    const v = await PF.call({ cmd: "values", node: it.node, player: p, reach: it.reach[1 - p] });
+    const s8 = new Uint8Array(na * H), e16 = new Int16Array(na * H);
+    for (let i = 0; i < na * H; i++) { s8[i] = Math.round(n.strat[i] * 255); const ev = v.values ? v.values[i] : 0; e16[i] = Math.max(-32767, Math.min(32767, Math.round(ev * 50))); }
+    nodes.push({ path: it.path, p, acts: n.children.map(c => [c.type, Math.round(c.amt * 100) / 100]), c: [Math.round(n.c0 * 100) / 100, Math.round(n.c1 * 100) / 100], s: s8, e: e16 });
+    n.children.forEach((c, k) => { const r = [it.reach[0].slice(), it.reach[1].slice()]; for (let h = 0; h < H; h++) r[p][h] *= n.strat[k * H + h]; q.push({ node: c.node, path: it.path === "" ? String(k) : it.path + "." + k, reach: r }); });
+  }
+  return nodes;
+}
+async function libStore(spotId, flopKey, cfg, hands, res, src) {
+  const nodes = await libExtract(hands);
+  const rec = { key: libKey(spotId, flopKey), spot: spotId, tree: LIB_TREE, flop: flopKey, pot: cfg.pot, stack: cfg.stack, H: [hands.h[0].length / 2, hands.h[1].length / 2], nodes, iters: res.iter, expl: res.expl, ms: res.ms, src, at: Date.now() };
+  await LDB.put(rec);
+  if (!lib.index.has(spotId)) lib.index.set(spotId, new Set()); lib.index.get(spotId).add(flopKey);
+  return rec;
+}
+// ---- overnight runner ----
+async function libWake(on) {
+  try {
+    if (on && "wakeLock" in navigator && !lib.wake) { lib.wake = await navigator.wakeLock.request("screen"); lib.wake.addEventListener("release", () => { lib.wake = null; }); }
+    if (!on && lib.wake) { await lib.wake.release(); lib.wake = null; }
+  } catch (e) { lib.wake = null; }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && lib.running) libWake(true); });
+async function libRun(stageId) {
+  if (lib.running) return;
+  const stage = LIB_STAGES.find(s => s.id === stageId); if (!stage) return;
+  if (!lib.loaded) await libLoadIndex();
+  try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) {}
+  lib.running = true; lib.stop = false; lib.stage = stage; lib.rate = []; libWake(true); libRender();
+  try {
+    while (!lib.stop) {
+      const tasks = libTasks(stage); if (!tasks.length) break;
+      // the video review has priority: wait while it needs the solver
+      while (!lib.stop && (lv.running || lv.queue.some(j => j.status === "wait") || pfs.busy)) await new Promise(r => setTimeout(r, 1000));
+      if (lib.stop) break;
+      const t = tasks[0], t0 = performance.now();
+      lib.cur = t; libRender();
+      try {
+        lib.busy = true;
+        if (lv.resident) { lv.resident.status = "evicted"; lv.resident = null; }
+        const cfg = libCfg(t.spot, t.flop.cards);
+        const su = await PF.call({ cmd: "setup", cfg, maxBytes: 1.6e9 });
+        if (!su.ok) { lib.err = `Zu wenig Speicher für ${t.flop.key} (${fmt(Math.round(su.bytes / 1e6))} MB).`; break; }
+        const res = await PF.call({ cmd: "run", maxIter: 120, target: 1, every: 10 }, pr => { lib.prog = pr; if (performance.now() - (lib.lastPaint || 0) > 1000) { lib.lastPaint = performance.now(); libRender(); } });
+        if (res.stopped) break;
+        const hs = await PF.call({ cmd: "hands" });
+        await libStore(t.spot, t.flop.key, cfg, { h: hs.h, w: hs.w }, res, "gerät");
+        lib.rate.push(performance.now() - t0); if (lib.rate.length > 20) lib.rate.shift();
+      } catch (e) { if (e && e.error === "restart") break; lib.err = "Fehler beim Rechnen: " + (e && (e.message || e.error) || "unbekannt"); }
+      finally { lib.busy = false; lib.cur = null; lib.prog = null; lvPump(); }
+      libRender();
+    }
+  } finally { lib.running = false; libWake(false); libRender(); }
+}
+function libStop() { lib.stop = true; if (lib.busy) PF.stop(); libRender(); }
+function libFmtDur(ms) { const m = Math.round(ms / 60000); if (m < 60) return `${m} min`; const h = Math.floor(m / 60); return h < 48 ? `${h} h ${m % 60} min` : `${fmt((m / 1440).toFixed(1))} Tage`; }
+function libRender() {
+  const el = $("libOut"); if (!el) return;
+  const avg = lib.rate.length ? lib.rate.reduce((a, b) => a + b, 0) / lib.rate.length : null;
+  let h = `<div class="libst">`;
+  for (const st of LIB_STAGES) {
+    const tot = st.n * st.spots.length, done = libStageDone(st), rest = tot - done;
+    const names = st.spots.map(id => (libSpotPreset(id) || {}).label || id).map(l => l.replace(/ \(Single-Raised\)/, "")).join(" · ");
+    const run = lib.running && lib.stage === st;
+    h += `<div class="librow"><div class="libtop"><strong>${st.label}</strong><span class="muted">${st.n === 1755 ? "alle 1.755 Flops" : `${st.n} Flops`}</span>${rest ? `<button type="button" class="btn${run ? " primary" : ""}" data-libst="${st.id}" ${lib.running ? "disabled" : ""}>${run ? "läuft" : done ? "Weiterrechnen" : "Rechnen"}</button>` : `<span class="okp">fertig</span>`}</div>
+      <div class="libspots">${names}</div>
+      <div class="libbar"><i style="width:${(done / tot * 100).toFixed(1)}%"></i></div>
+      <div class="libnum"><span class="mono">${done.toLocaleString("de-DE")} / ${tot.toLocaleString("de-DE")}</span><span>${rest ? (avg ? `noch etwa ${libFmtDur(rest * avg)}` : "") : ""}</span></div></div>`;
+  }
+  h += `</div>`;
+  if (lib.running) {
+    const c = lib.cur, pr = lib.prog;
+    h += `<div class="status"><i class="spinner"></i><span>${c ? `${(libSpotPreset(c.spot) || {}).label || c.spot} · Flop ${c.flop.key.match(/../g).map(x => x[0] + SUITS[x[1]]).join(" ")}${pr ? ` · Iteration ${pr.iter}, ${fmt(pr.expl.toFixed(1))} %` : ""}` : "wartet, das Video-Review hat Vorrang …"}${avg ? ` · ${fmt((avg / 1000).toFixed(0))} s pro Flop` : ""}${lib.wake ? " · Bildschirm bleibt an" : ""}</span><button class="btn copy" type="button" id="libStop">Pause</button></div>`;
+  }
+  if (lib.err) h += `<p class="cnote">${lib.err}</p>`;
+  if (!LDB.persistent()) h += `<p class="cnote">In dieser Ansicht kann die Seite nichts dauerhaft speichern. Rechne die Bibliothek in der Web-App auf dem Home-Bildschirm.</p>`;
+  el.innerHTML = h;
+  el.querySelectorAll("[data-libst]").forEach(b => b.onclick = () => { lib.err = null; libRun(+b.dataset.libst); });
+  if ($("libStop")) $("libStop").onclick = libStop;
+  const tot = [...lib.index.values()].reduce((a, s) => a + s.size, 0);
+  $("libCount").textContent = tot ? `${fmt(tot)} Flop-Lösungen gespeichert` : "noch leer";
+}
+// ---- export / import (iPhone ⇄ iPad ⇄ Pi) ----
+const b64e = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 32768) s += String.fromCharCode.apply(null, u8.subarray(i, i + 32768)); return btoa(s); };
+const b64d = s => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+function libRecToLine(r) { return JSON.stringify(Object.assign({}, r, { nodes: r.nodes.map(n => Object.assign({}, n, { s: b64e(n.s), e: b64e(new Uint8Array(n.e.buffer, n.e.byteOffset, n.e.byteLength)) })) })); }
+function libLineToRec(line) {
+  const r = JSON.parse(line); if (!r || !r.key || !Array.isArray(r.nodes)) return null;
+  r.nodes = r.nodes.map(n => { const e8 = b64d(n.e), e = new Int16Array(e8.length / 2); new Uint8Array(e.buffer).set(e8); return Object.assign({}, n, { s: b64d(n.s), e }); });
+  return r;
+}
+function libDownload(name, text) {
+  const blob = new Blob([text], { type: "application/octet-stream" }), u = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 5000);
+}
+async function libExport() { const all = await LDB.all(); libDownload(`flop-bibliothek-${all.length}.jsonl`, all.map(libRecToLine).join("\n") + "\n"); }
+async function libImport(files) {
+  let n = 0, bad = 0;
+  for (const f of files) { const text = await f.text();
+    for (const line of text.split("\n")) { if (!line.trim()) continue; try { const r = libLineToRec(line); if (!r) { bad++; continue; } await LDB.put(r); n++; } catch (e) { bad++; } } }
+  await libLoadIndex(); libRender();
+  $("libMsg").hidden = false; $("libMsg").textContent = `${fmt(n)} Flop-Lösungen importiert${bad ? `, ${bad} Zeilen übersprungen` : ""}.`;
+}
+// ---- lookup during the review ----
+function libSpotOf(pre) { // preflop actions -> library spot id
+  const acts = pre.filter(a => a.t !== "post"), raises = acts.filter(a => a.t === "raise" || a.t === "bet");
+  const folded = new Set(acts.filter(a => a.t === "fold").map(a => a.pos)), live = [...new Set(acts.map(a => a.pos))].filter(p => !folded.has(p));
+  if (live.length !== 2 || !raises.length) return null;
+  const o = raises[0].pos;
+  if (raises.length === 1) { const c = live.find(p => p !== o);
+    if (c === "BB" && ["BTN", "CO", "HJ", "UTG", "SB"].includes(o)) return `${o.toLowerCase()}_bb`;
+    if (o === "CO" && c === "BTN") return "co_btn"; return null; }
+  if (raises.length === 2) { const t = raises[1].pos;
+    if (o === "BTN" && t === "BB") return "bb3_btn"; if (o === "BTN" && t === "SB") return "sb3_btn"; if (o === "CO" && t === "BTN") return "btn3_co"; }
+  return null;
+}
+const libHandIdx = new Map();
+function libHandIndex(spotId, flopKey, p) { // combo index -> position in the solver's hand list (same order as the C code)
+  const k = `${spotId}|${flopKey}|${p}`; if (libHandIdx.has(k)) return libHandIdx.get(k);
+  const sp = libSpotPreset(spotId), w = pfWeights(CASH.parse(p === 0 ? sp.oop() : sp.ip())), board = new Set(flopKey.match(/../g).map(pfCard));
+  const m = new Int16Array(1326).fill(-1); let n = 0;
+  for (let b = 1; b < 52; b++) for (let a = 0; a < b; a++) { const ci = b * (b - 1) / 2 + a; if (w[ci] > 0 && !board.has(a) && !board.has(b)) m[ci] = n++; }
+  libHandIdx.set(k, m); return m;
+}
+// follow the flop line through a stored record; returns the node where `stopAt` acts, plus reach
+function libFollow(rec, acts, oopPos, ipPos, realPot) {
+  let path = "", notes = []; const byPath = new Map(rec.nodes.map(n => [n.path, n]));
+  const steps = [];
+  for (const a of acts) {
+    const p = a.pos === oopPos ? 0 : a.pos === ipPos ? 1 : -1; if (p < 0) continue;
+    let n = byPath.get(path); if (!n) return { fail: "Line nicht in der Bibliothek." };
+    if (n.p !== p) { const ck = n.acts.findIndex(x => x[0] === 1); if (ck < 0) return { fail: "Die Line passt nicht zur Bibliothek." }; steps.push({ n, k: ck }); path = path === "" ? String(ck) : path + "." + ck; n = byPath.get(path); if (!n) return { fail: "Line nicht in der Bibliothek." }; }
+    // match sizes relative to the pot (the library was solved with 100 BB stacks)
+    const t = a.t === "bet" || a.t === "raise" ? "agg" : a.t;
+    let k = -1;
+    if (t === "check") k = n.acts.findIndex(x => x[0] === 1); else if (t === "call") k = n.acts.findIndex(x => x[0] === 2); else if (t === "fold") k = n.acts.findIndex(x => x[0] === 0);
+    else { const want = (a.to || 0) / realPot; let bd = 1e9; n.acts.forEach((x, i) => { if (x[0] < 3) return; const d = Math.abs(x[1] / rec.pot - want); if (d < bd) { bd = d; k = i; } });
+      if (k >= 0) { const got = n.acts[k][1] / rec.pot; if (Math.abs(got - want) > .3 * Math.max(want, .1)) notes.push(`Einsatz ${Math.round(want * 100)} % vom Pot, in der Bibliothek ${Math.round(got * 100)} %`); } }
+    if (k < 0) return { fail: "Diese Aktion gibt es in der Bibliothek nicht." };
+    steps.push({ n, k }); path = path === "" ? String(k) : path + "." + k;
+  }
+  return { path, node: byPath.get(path), steps, notes };
+}
+async function libDecision(H, d) { // flop decision answered from the library (exact or nearest flop)
+  if (!lib.loaded) await libLoadIndex();
+  const spot = libSpotOf(H.streets[0].acts); if (!spot || !lib.index.get(spot)) return false;
+  const sp = libSpotPreset(spot); if (![sp.oopPos, sp.ipPos].includes(H.heroPos)) return false;
+  const flop = (H.streets[1].board || []).slice(0, 3).map(pfCard); if (flop.length < 3 || flop.some(c => c < 0)) return false;
+  const near = LF.nearest(flop, lib.index.get(spot)); if (!near) return false;
+  const rec = await LDB.get(libKey(spot, near.key)); if (!rec) return false;
+  const m = LF.mapper(flop, near.key);
+  const snapFlop = d.snap[0];
+  const f = libFollow(rec, snapFlop.acts, sp.oopPos, sp.ipPos, H.streets[1].pot);
+  const hp = H.heroPos === sp.oopPos ? 0 : 1;
+  if (f.fail) { d.libSol = { fail: f.fail }; return true; }
+  let n = f.node;
+  if (n && n.p !== hp) { const ck = n.acts.findIndex(x => x[0] === 1); if (ck >= 0) { f.path = f.path === "" ? String(ck) : f.path + "." + ck; n = rec.nodes.find(x => x.path === f.path); } }
+  if (!n || n.p !== hp) { d.libSol = { fail: "Die Line passt nicht zur Bibliothek." }; return true; }
+  const cs = parseCards(H.cards), hc = cs ? cs.cs.map(x => pfCard(x.r + x.s)) : null, mc = hc ? m.combo(hc[0], hc[1]) : null;
+  const idx = libHandIndex(spot, near.key, hp), H0 = rec.H[hp], hi = mc ? idx[LF.combo(mc[0], mc[1])] : -1;
+  const na = n.acts.length, scale = H.streets[1].pot / rec.pot, potNode = rec.pot + n.c[0] + n.c[1];
+  const label = x => x[0] === 3 ? `Bet ${Math.round(x[1] / potNode * 100)} % (${pfFmt(x[1] * scale)} BB)` : x[0] === 4 ? `Raise auf ${pfFmt(x[1] * scale)} BB` : x[0] === 5 ? "All-in" : PF_ACT[x[0]];
+  // how the whole range plays here: own strategy products along the line
+  const reach = new Float32Array(H0).fill(1);
+  for (const st of f.steps) if (st.n.p === hp) for (let h = 0; h < H0; h++) reach[h] *= st.n.s[st.k * H0 + h] / 255;
+  let rt = 0; for (let h = 0; h < H0; h++) rt += reach[h];
+  const items = n.acts.map((x, k) => { let rs = 0; for (let h = 0; h < H0; h++) rs += reach[h] * n.s[k * H0 + h] / 255;
+    return { label: label(x), type: x[0], amt: x[1] * scale, freq: hi >= 0 ? n.s[k * H0 + hi] / 255 : null, ev: hi >= 0 ? n.e[k * H0 + hi] / 50 * scale : null, range: rt > 0 ? rs / rt : null }; });
+  let best = -1; items.forEach((it, k) => { if (it.ev != null && (best < 0 || it.ev > items[best].ev)) best = k; });
+  d.libSol = { items, best, inRange: hi >= 0, pot: H.streets[1].pot, notes: f.notes, exact: near.exact, libFlop: near.key, src: "lib", n: { children: n.acts.map(x => ({ type: x[0], amt: x[1] * scale })) } };
+  if (!d.sol) { d.sol = d.libSol; lvVerdict(d); }
+  return true;
+}
+// narrowed ranges at the start of the turn, from the library's flop strategies along the real flop line
+async function libTurnWeights(H) {
+  const spot = libSpotOf(H.streets[0].acts); if (!spot || !lib.index.get(spot)) return null;
+  const sp = libSpotPreset(spot), flop = H.streets[1].board.slice(0, 3).map(pfCard); if (flop.some(c => c < 0)) return null;
+  const near = LF.nearest(flop, lib.index.get(spot)); if (!near) return null;
+  const rec = await LDB.get(libKey(spot, near.key)); if (!rec) return null;
+  const f = libFollow(rec, H.streets[1].acts, sp.oopPos, sp.ipPos, H.streets[1].pot); if (f.fail) return null;
+  const m = LF.mapper(flop, near.key), w = [pfWeights(CASH.parse(sp.oop())), pfWeights(CASH.parse(sp.ip()))];
+  const idx = [libHandIndex(spot, near.key, 0), libHandIndex(spot, near.key, 1)];
+  for (let b = 1; b < 52; b++) for (let a = 0; a < b; a++) {
+    const ci = b * (b - 1) / 2 + a; if (!(w[0][ci] > 0 || w[1][ci] > 0)) continue;
+    const mc = m.combo(a, b), li = mc ? LF.combo(mc[0], mc[1]) : -1;
+    for (const st of f.steps) { const p = st.n.p, H0 = rec.H[p], hi = li >= 0 ? idx[p][li] : -1;
+      if (!(w[p][ci] > 0)) continue;
+      if (hi >= 0) w[p][ci] *= st.n.s[st.k * H0 + hi] / 255;
+      else { let s = 0; for (let h = 0; h < H0; h++) s += st.n.s[st.k * H0 + h]; w[p][ci] *= s / H0 / 255; } }
+  }
+  return { w, oopPos: sp.oopPos, ipPos: sp.ipPos, exact: near.exact, spot };
+}
+// ---- Raspberry Pi: job file + program ----
+const PI_SRC = "Ly8gcGZzb2x2ZS5jIOKAlCBoZWFkcy11cCBOTEhFIHBvc3RmbG9wIHNvbHZlciAoRGlzY291bnRlZCBDRlIsIHZlY3RvcmlzZWQgb3ZlciBoYW5kcykuCi8vIEJ1aWxkcyBuYXRpdmVseSAoLUROQVRJVkUsIGZvciB0ZXN0cykgYW5kIGZyZWVzdGFuZGluZyBmb3Igd2FzbTMyIChjbGFuZyAtLXRhcmdldD13YXNtMzIpLgovLyBDYXJkczogMC4uNTEgPSByYW5rKjQgKyBzdWl0LCByYW5rIDAgPSBkZXVjZSAuLiAxMiA9IGFjZS4gUGxheWVyczogMCA9IE9PUCwgMSA9IElQLgojaW5jbHVkZSA8c3RkaW50Lmg+CiNpbmNsdWRlIDxzdGRkZWYuaD4KI2lmZGVmIE5BVElWRQojaW5jbHVkZSA8c3RkbGliLmg+CiNpbmNsdWRlIDxzdHJpbmcuaD4KI2RlZmluZSBFWFBPUlQobikKI2Vsc2UKI2RlZmluZSBFWFBPUlQobikgX19hdHRyaWJ1dGVfXygoZXhwb3J0X25hbWUobikpKQp2b2lkICptZW1zZXQodm9pZCAqZCwgaW50IGMsIHNpemVfdCBuKSB7IHVuc2lnbmVkIGNoYXIgKnAgPSBkOyB3aGlsZSAobi0tKSAqcCsrID0gKHVuc2lnbmVkIGNoYXIpYzsgcmV0dXJuIGQ7IH0Kdm9pZCAqbWVtY3B5KHZvaWQgKmQsIGNvbnN0IHZvaWQgKnMsIHNpemVfdCBuKSB7IHVuc2lnbmVkIGNoYXIgKnAgPSBkOyBjb25zdCB1bnNpZ25lZCBjaGFyICpxID0gczsgd2hpbGUgKG4tLSkgKnArKyA9ICpxKys7IHJldHVybiBkOyB9CiNlbmRpZgoKLy8gLS0tLS0tLS0tLS0tLS0tLSBtZW1vcnkgLS0tLS0tLS0tLS0tLS0tLQojaWZkZWYgTkFUSVZFCnN0YXRpYyB1bnNpZ25lZCBjaGFyICpIRUFQID0gMDsgc3RhdGljIHNpemVfdCBIRUFQX0NBUCA9IDAsIEhFQVBfVE9QID0gMDsKc3RhdGljIHZvaWQgaGVhcF9pbml0KHZvaWQpIHsgaWYgKCFIRUFQKSB7IGlmICghSEVBUF9DQVApIEhFQVBfQ0FQID0gKHNpemVfdCk1IDw8IDMwOyBIRUFQID0gbWFsbG9jKEhFQVBfQ0FQKTsgfSB9CnN0YXRpYyB2b2lkICp4YWxsb2Moc2l6ZV90IG4pIHsgaGVhcF9pbml0KCk7IG4gPSAobiArIDE1KSAmIH4oc2l6ZV90KTE1OyBpZiAoSEVBUF9UT1AgKyBuID4gSEVBUF9DQVApIHJldHVybiAwOyB2b2lkICpwID0gSEVBUCArIEhFQVBfVE9QOyBIRUFQX1RPUCArPSBuOyByZXR1cm4gcDsgfQpzdGF0aWMgdm9pZCBoZWFwX3Jlc2V0KHZvaWQpIHsgSEVBUF9UT1AgPSAwOyB9CnN0YXRpYyBzaXplX3QgaGVhcF91c2VkKHZvaWQpIHsgcmV0dXJuIEhFQVBfVE9QOyB9CiNlbHNlCmV4dGVybiB1bnNpZ25lZCBjaGFyIF9faGVhcF9iYXNlOwpzdGF0aWMgdWludHB0cl90IEhUT1AgPSAwOwpzdGF0aWMgdm9pZCAqeGFsbG9jKHNpemVfdCBuKSB7CiAgaWYgKCFIVE9QKSBIVE9QID0gKCh1aW50cHRyX3QpJl9faGVhcF9iYXNlICsgMTUpICYgfih1aW50cHRyX3QpMTU7CiAgbiA9IChuICsgMTUpICYgfihzaXplX3QpMTU7CiAgdWludHB0cl90IGVuZCA9IEhUT1AgKyBuLCBoYXZlID0gKHVpbnRwdHJfdClfX2J1aWx0aW5fd2FzbV9tZW1vcnlfc2l6ZSgwKSA8PCAxNjsKICBpZiAoZW5kIDwgSFRPUCkgcmV0dXJuIDA7CiAgaWYgKGVuZCA+IGhhdmUpIHsgc2l6ZV90IHBhZ2VzID0gKGVuZCAtIGhhdmUgKyA2NTUzNSkgPj4gMTY7IGlmIChfX2J1aWx0aW5fd2FzbV9tZW1vcnlfZ3JvdygwLCBwYWdlcykgPT0gKHNpemVfdCktMSkgcmV0dXJuIDA7IH0KICB2b2lkICpwID0gKHZvaWQgKilIVE9QOyBIVE9QID0gZW5kOyByZXR1cm4gcDsKfQpzdGF0aWMgdm9pZCBoZWFwX3Jlc2V0KHZvaWQpIHsgSFRPUCA9ICgodWludHB0cl90KSZfX2hlYXBfYmFzZSArIDE1KSAmIH4odWludHB0cl90KTE1OyB9CnN0YXRpYyBzaXplX3QgaGVhcF91c2VkKHZvaWQpIHsgcmV0dXJuIEhUT1AgPyBIVE9QIC0gKHVpbnRwdHJfdCkmX19oZWFwX2Jhc2UgOiAwOyB9CiNlbmRpZgoKLy8gLS0tLS0tLS0tLS0tLS0tLSBoYW5kIGV2YWx1YXRpb24gKDcgY2FyZHMpIC0tLS0tLS0tLS0tLS0tLS0Kc3RhdGljIGludCB0b3BfYml0KHVpbnQzMl90IG0pIHsgcmV0dXJuIDMxIC0gX19idWlsdGluX2NseihtKTsgfQpzdGF0aWMgdWludDMyX3Qgc3RyYWlnaHRfaGkodWludDMyX3QgbSkgeyAvLyAxMy1iaXQgcmFuayBtYXNrIC0+IChpbmRleCBvZiB0aGUgc3RyYWlnaHQncyB0b3AgY2FyZCBpbiB0aGUgYWNlLWxvdy1leHRlbmRlZCBtYXNrKSBvciAwCiAgdWludDMyX3QgZSA9IChtIDw8IDEpIHwgKChtID4+IDEyKSAmIDEpOwogIHVpbnQzMl90IHMgPSBlICYgKGUgPj4gMSkgJiAoZSA+PiAyKSAmIChlID4+IDMpICYgKGUgPj4gNCk7CiAgcmV0dXJuIHMgPyAodWludDMyX3QpdG9wX2JpdChzKSArIDQgOiAwOwp9CnN0YXRpYyB1aW50MzJfdCBraWNrKHVpbnQzMl90IG0sIGludCBrLCB1aW50MzJfdCBhY2MpIHsgZm9yIChpbnQgaSA9IDA7IGkgPCBrOyBpKyspIHsgaW50IGIgPSB0b3BfYml0KG0pOyBhY2MgPSAoYWNjIDw8IDQpIHwgKHVpbnQzMl90KWI7IG0gJj0gfigxdSA8PCBiKTsgfSByZXR1cm4gYWNjOyB9CnN0YXRpYyB1aW50MzJfdCBldmFsNyhjb25zdCB1aW50OF90ICpjKSB7CiAgdWludDMyX3Qgc21bNF0gPSB7MCwgMCwgMCwgMH07IGludCBjbnRbMTNdID0gezB9OwogIGZvciAoaW50IGkgPSAwOyBpIDwgNzsgaSsrKSB7IHNtW2NbaV0gJiAzXSB8PSAxdSA8PCAoY1tpXSA+PiAyKTsgY250W2NbaV0gPj4gMl0rKzsgfQogIGZvciAoaW50IHMgPSAwOyBzIDwgNDsgcysrKSBpZiAoX19idWlsdGluX3BvcGNvdW50KHNtW3NdKSA+PSA1KSB7CiAgICB1aW50MzJfdCBzdCA9IHN0cmFpZ2h0X2hpKHNtW3NdKTsgaWYgKHN0KSByZXR1cm4gKDh1IDw8IDIwKSB8IHN0OwogICAgcmV0dXJuICg1dSA8PCAyMCkgfCBraWNrKHNtW3NdLCA1LCAwKTsKICB9CiAgdWludDMyX3QgYWxsID0gc21bMF0gfCBzbVsxXSB8IHNtWzJdIHwgc21bM107CiAgaW50IHEgPSAtMSwgdDEgPSAtMSwgdDIgPSAtMSwgcDEgPSAtMSwgcDIgPSAtMTsKICBmb3IgKGludCByID0gMTI7IHIgPj0gMDsgci0tKSB7IGludCBuID0gY250W3JdOwogICAgaWYgKG4gPT0gNCkgcSA9IHI7IGVsc2UgaWYgKG4gPT0gMykgeyBpZiAodDEgPCAwKSB0MSA9IHI7IGVsc2UgaWYgKHQyIDwgMCkgdDIgPSByOyB9IGVsc2UgaWYgKG4gPT0gMikgeyBpZiAocDEgPCAwKSBwMSA9IHI7IGVsc2UgaWYgKHAyIDwgMCkgcDIgPSByOyB9IH0KICBpZiAocSA+PSAwKSByZXR1cm4gKDd1IDw8IDIwKSB8ICgodWludDMyX3QpcSA8PCA0KSB8ICh1aW50MzJfdCl0b3BfYml0KGFsbCAmIH4oMXUgPDwgcSkpOwogIGlmICh0MSA+PSAwICYmICh0MiA+PSAwIHx8IHAxID49IDApKSB7IGludCBwciA9IHQyID4gcDEgPyB0MiA6IHAxOyByZXR1cm4gKDZ1IDw8IDIwKSB8ICgodWludDMyX3QpdDEgPDwgNCkgfCAodWludDMyX3QpcHI7IH0KICB1aW50MzJfdCBzdCA9IHN0cmFpZ2h0X2hpKGFsbCk7IGlmIChzdCkgcmV0dXJuICg0dSA8PCAyMCkgfCBzdDsKICBpZiAodDEgPj0gMCkgcmV0dXJuICgzdSA8PCAyMCkgfCBraWNrKGFsbCAmIH4oMXUgPDwgdDEpLCAyLCAodWludDMyX3QpdDEpOwogIGlmIChwMSA+PSAwICYmIHAyID49IDApIHJldHVybiAoMnUgPDwgMjApIHwgKCh1aW50MzJfdClwMSA8PCA4KSB8ICgodWludDMyX3QpcDIgPDwgNCkgfCAodWludDMyX3QpdG9wX2JpdChhbGwgJiB+KDF1IDw8IHAxKSAmIH4oMXUgPDwgcDIpKTsKICBpZiAocDEgPj0gMCkgcmV0dXJuICgxdSA8PCAyMCkgfCBraWNrKGFsbCAmIH4oMXUgPDwgcDEpLCAzLCAodWludDMyX3QpcDEpOwogIHJldHVybiBraWNrKGFsbCwgNSwgMCk7Cn0KCi8vIC0tLS0tLS0tLS0tLS0tLS0gdHJlZSAtLS0tLS0tLS0tLS0tLS0tCmVudW0geyBBX0ZPTEQgPSAwLCBBX0NIRUNLID0gMSwgQV9DQUxMID0gMiwgQV9CRVQgPSAzLCBBX1JBSVNFID0gNCwgQV9BTExJTiA9IDUgfTsKZW51bSB7IE5fQUNUSU9OID0gMCwgTl9DSEFOQ0UgPSAxLCBOX0ZPTEQgPSAyLCBOX1NIT1cgPSAzIH07CnR5cGVkZWYgc3RydWN0IHsKICB1aW50OF90IHR5cGUsIHBsYXllciwgbmFjdCwgYWN0dHlwZTsgLy8gcGxheWVyOiBhY3RvciAoYWN0aW9uKSAvIGZvbGRlciAoZm9sZCkKICBpbnQzMl90IGNoaWxkOyAgLy8gZmlyc3QgY2hpbGQgKGNoaWxkcmVuIGFyZSBjb250aWd1b3VzKQogIGludDMyX3QgZGF0YTsgICAvLyBhY3Rpb246IGZsb2F0IG9mZnNldCBpbnRvIEFSRU5BOyBzaG93ZG93bjogdGFibGUgaWQ7IGNoYW5jZTogbnVtYmVyIG9mIGNhcmRzCiAgZmxvYXQgYWN0YW10OyAgIC8vIGJldCB0b3RhbCBvbiB0aGlzIHN0cmVldCBhZnRlciB0aGUgYWN0aW9uIHRoYXQgbGVkIGhlcmUKICBmbG9hdCBjMCwgYzE7ICAgLy8gY2hpcHMgcHV0IGluIGJ5IE9PUCAvIElQIHNpbmNlIHRoZSBzdGFydCBvZiB0aGUgc29sdmUgKGluY2wuIGN1cnJlbnQgc3RyZWV0KQogIGludDE2X3QgY2FyZDsgICAvLyBjYXJkIGRlYWx0IGJ5IHRoZSBwYXJlbnQgY2hhbmNlIG5vZGUsIC0xIG90aGVyd2lzZQogIGludDE2X3Qgc3RyZWV0OyAvLyAwIGZsb3AsIDEgdHVybiwgMiByaXZlcgp9IE5vZGU7CgpzdGF0aWMgZmxvYXQgUDAsIFNUSywgUkFLRV9SLCBSQUtFX0NBUCwgQUxMSU5fVEhSID0gLjY3ZiwgQUREX0FMTElOID0gMS41ZjsKc3RhdGljIGludCBTVEFSVF9TVCwgTkIwOyBzdGF0aWMgdWludDhfdCBCT0FSRDBbNV07CnN0YXRpYyBmbG9hdCBCRVRTWzNdWzJdWzRdOyBzdGF0aWMgaW50IE5CRVRTWzNdWzJdOwpzdGF0aWMgZmxvYXQgUkFJU0VTWzNdWzRdOyBzdGF0aWMgaW50IE5SQUlTRVNbM107CnN0YXRpYyBpbnQgTUFYQkVUU1szXTsKCnN0YXRpYyBpbnQgTkhbMl07IHN0YXRpYyB1aW50OF90ICpIQ1syXTsgc3RhdGljIGZsb2F0ICpXWzJdOyBzdGF0aWMgaW50MzJfdCAqU0FNRVsyXTsgc3RhdGljIGludCBITUFYOwpzdGF0aWMgTm9kZSAqTk9ERVM7IHN0YXRpYyBpbnQgTk4sIE5OT0RFUzsgc3RhdGljIGludDE2X3QgKkFSRU5BOyBzdGF0aWMgZmxvYXQgKlNDQUxFOyBzdGF0aWMgc2l6ZV90IE5GLCBORkxPQVRTOyBzdGF0aWMgaW50IFBBU1M7CnN0YXRpYyBpbnQzMl90IFRCTE1BUFs1MiAqIDUyXTsgc3RhdGljIGludCBOVEJMOyBzdGF0aWMgdWludDhfdCAoKlRCTEJPQVJEKVs1XTsKc3RhdGljIGludDMyX3QgKlRCTF9JRFhbMl07IHN0YXRpYyB1aW50MzJfdCAqVEJMX1NUUlsyXTsgc3RhdGljIGludDMyX3QgKlRCTF9PRkZbMl0sICpUQkxfTlsyXTsKc3RhdGljIGZsb2F0ICpTQ1JBVENIOyBzdGF0aWMgc2l6ZV90IFNDUl9UT1AsIFNDUl9DQVA7CnN0YXRpYyBmbG9hdCAqc2NyKHNpemVfdCBuKSB7IGZsb2F0ICpwID0gU0NSQVRDSCArIFNDUl9UT1A7IFNDUl9UT1AgKz0gKG4gKyAzKSAmIH4oc2l6ZV90KTM7IHJldHVybiBwOyB9Cgp0eXBlZGVmIHN0cnVjdCB7IGludCBzdHJlZXQsIHBsYXllciwgbmJldHMsIGNoZWNrZWQ7IGZsb2F0IGJbMl0sIGNbMl07IHVpbnQ4X3QgYm9hcmRbNV07IGludCBuYjsgfSBTdDsKc3RhdGljIGludCBjb21ib19pbmRleChpbnQgYSwgaW50IGIpIHsgaWYgKGEgPiBiKSB7IGludCB0ID0gYTsgYSA9IGI7IGIgPSB0OyB9IHJldHVybiBiICogKGIgLSAxKSAvIDIgKyBhOyB9CnN0YXRpYyBpbnQgb25fYm9hcmQoY29uc3QgdWludDhfdCAqYmQsIGludCBuYiwgaW50IGMpIHsgZm9yIChpbnQgaSA9IDA7IGkgPCBuYjsgaSsrKSBpZiAoYmRbaV0gPT0gYykgcmV0dXJuIDE7IHJldHVybiAwOyB9CnN0YXRpYyBmbG9hdCBwb3Rfb2YoY29uc3QgU3QgKnMpIHsgcmV0dXJuIFAwICsgcy0+Y1swXSArIHMtPmNbMV0gKyBzLT5iWzBdICsgcy0+YlsxXTsgfQpzdGF0aWMgZmxvYXQgc3RhY2tfbGVmdChjb25zdCBTdCAqcywgaW50IHApIHsgcmV0dXJuIFNUSyAtIHMtPmNbcF0gLSBzLT5iW3BdOyB9CnN0YXRpYyBpbnQgdGFibGVfZm9yKGNvbnN0IHVpbnQ4X3QgKmJkKSB7CiAgaW50IGtleSA9IFNUQVJUX1NUID09IDAgPyBjb21ib19pbmRleChiZFszXSwgYmRbNF0pIDogU1RBUlRfU1QgPT0gMSA/IGJkWzRdIDogMDsKICBpbnQgaWQgPSBUQkxNQVBba2V5XTsKICBpZiAoaWQgPCAwKSB7IGlkID0gVEJMTUFQW2tleV0gPSBOVEJMKys7IGlmIChQQVNTID09IDEpIG1lbWNweShUQkxCT0FSRFtpZF0sIGJkLCA1KTsgfQogIHJldHVybiBpZDsKfQpzdGF0aWMgdm9pZCBidWlsZChpbnQgbmksIFN0IHMpOwpzdGF0aWMgdm9pZCBzZXRfdGVybShpbnQgbmksIGludCB0eXBlLCBpbnQgcGxheWVyLCBjb25zdCBTdCAqcykgewogIGlmIChQQVNTID09IDEpIHsgTm9kZSAqbiA9ICZOT0RFU1tuaV07IG4tPnR5cGUgPSAodWludDhfdCl0eXBlOyBuLT5wbGF5ZXIgPSAodWludDhfdClwbGF5ZXI7IG4tPm5hY3QgPSAwOyBuLT5jaGlsZCA9IDA7IG4tPmRhdGEgPSAwOyBuLT5jMCA9IHMtPmNbMF0gKyBzLT5iWzBdOyBuLT5jMSA9IHMtPmNbMV0gKyBzLT5iWzFdOyBuLT5zdHJlZXQgPSAoaW50MTZfdClzLT5zdHJlZXQ7IH0KfQpzdGF0aWMgdm9pZCBlbmRfc3RyZWV0KGludCBuaSwgU3QgcykgewogIHMuY1swXSArPSBzLmJbMF07IHMuY1sxXSArPSBzLmJbMV07IHMuYlswXSA9IHMuYlsxXSA9IDA7CiAgaWYgKHMuc3RyZWV0ID09IDIpIHsgc2V0X3Rlcm0obmksIE5fU0hPVywgMCwgJnMpOyBpbnQgaWQgPSB0YWJsZV9mb3Iocy5ib2FyZCk7IGlmIChQQVNTID09IDEpIE5PREVTW25pXS5kYXRhID0gaWQ7IHJldHVybjsgfQogIGludCBuY2FyZCA9IDA7IHVpbnQ4X3QgY2FyZHNbNTJdOwogIGZvciAoaW50IGMgPSAwOyBjIDwgNTI7IGMrKykgaWYgKCFvbl9ib2FyZChzLmJvYXJkLCBzLm5iLCBjKSkgY2FyZHNbbmNhcmQrK10gPSAodWludDhfdCljOwogIGludCBmaXJzdCA9IE5OOyBOTiArPSBuY2FyZDsKICBpZiAoUEFTUyA9PSAxKSB7IE5vZGUgKm4gPSAmTk9ERVNbbmldOyBuLT50eXBlID0gTl9DSEFOQ0U7IG4tPnBsYXllciA9IDA7IG4tPm5hY3QgPSAwOyBuLT5jaGlsZCA9IGZpcnN0OyBuLT5jMCA9IHMuY1swXTsgbi0+YzEgPSBzLmNbMV07IG4tPnN0cmVldCA9IChpbnQxNl90KXMuc3RyZWV0OyBuLT5kYXRhID0gbmNhcmQ7IH0KICBmb3IgKGludCBrID0gMDsgayA8IG5jYXJkOyBrKyspIHsKICAgIFN0IHQgPSBzOyB0LmJvYXJkW3QubmIrK10gPSBjYXJkc1trXTsgdC5zdHJlZXQrKzsgdC5wbGF5ZXIgPSAwOyB0Lm5iZXRzID0gMDsgdC5jaGVja2VkID0gMDsKICAgIGludCBjaSA9IGZpcnN0ICsgazsKICAgIGlmIChQQVNTID09IDEpIHsgTk9ERVNbY2ldLmNhcmQgPSBjYXJkc1trXTsgTk9ERVNbY2ldLmFjdHR5cGUgPSAyNTU7IE5PREVTW2NpXS5hY3RhbXQgPSAwOyB9CiAgICBpZiAoc3RhY2tfbGVmdCgmdCwgMCkgPD0gMWUtNGYgfHwgc3RhY2tfbGVmdCgmdCwgMSkgPD0gMWUtNGYpIGVuZF9zdHJlZXQoY2ksIHQpOyBlbHNlIGJ1aWxkKGNpLCB0KTsKICB9Cn0KdHlwZWRlZiBzdHJ1Y3QgeyBpbnQgdHlwZTsgZmxvYXQgYW10OyB9IEFjdDsKc3RhdGljIGludCBnZW5fYWN0aW9ucyhjb25zdCBTdCAqcywgQWN0ICpvdXQpIHsKICBpbnQgcCA9IHMtPnBsYXllciwgbyA9IDEgLSBwLCBuID0gMDsKICBmbG9hdCB0b2NhbGwgPSBzLT5iW29dIC0gcy0+YltwXSwgbGVmdCA9IHN0YWNrX2xlZnQocywgcCksIHBvdCA9IHBvdF9vZihzKTsKICBpZiAodG9jYWxsIDw9IDFlLTZmKSB7CiAgICBvdXRbbisrXSA9IChBY3Qpe0FfQ0hFQ0ssIHMtPmJbcF19OwogICAgaWYgKHMtPm5iZXRzIDwgTUFYQkVUU1tzLT5zdHJlZXRdKSB7CiAgICAgIGZvciAoaW50IGkgPSAwOyBpIDwgTkJFVFNbcy0+c3RyZWV0XVtwXTsgaSsrKSB7CiAgICAgICAgZmxvYXQgYW10ID0gQkVUU1tzLT5zdHJlZXRdW3BdW2ldICogcG90OyBpZiAoYW10IDwgMSkgYW10ID0gMTsKICAgICAgICBpZiAoYW10ID49IEFMTElOX1RIUiAqIGxlZnQpIG91dFtuKytdID0gKEFjdCl7QV9BTExJTiwgcy0+YltwXSArIGxlZnR9OyBlbHNlIG91dFtuKytdID0gKEFjdCl7QV9CRVQsIHMtPmJbcF0gKyBhbXR9OwogICAgICB9CiAgICAgIGlmIChsZWZ0IDw9IEFERF9BTExJTiAqIHBvdCkgb3V0W24rK10gPSAoQWN0KXtBX0FMTElOLCBzLT5iW3BdICsgbGVmdH07CiAgICB9CiAgfSBlbHNlIHsKICAgIG91dFtuKytdID0gKEFjdCl7QV9GT0xELCBzLT5iW3BdfTsKICAgIGlmIChsZWZ0IDw9IHRvY2FsbCArIDFlLTZmKSBvdXRbbisrXSA9IChBY3Qpe0FfQ0FMTCwgcy0+YltwXSArIGxlZnR9OwogICAgZWxzZSB7CiAgICAgIG91dFtuKytdID0gKEFjdCl7QV9DQUxMLCBzLT5iW29dfTsKICAgICAgaWYgKHMtPm5iZXRzIDwgTUFYQkVUU1tzLT5zdHJlZXRdKSB7CiAgICAgICAgZmxvYXQgbWludG8gPSBzLT5iW29dICsgdG9jYWxsOwogICAgICAgIGZvciAoaW50IGkgPSAwOyBpIDwgTlJBSVNFU1tzLT5zdHJlZXRdOyBpKyspIHsKICAgICAgICAgIGZsb2F0IHRvID0gUkFJU0VTW3MtPnN0cmVldF1baV0gKiBzLT5iW29dOyBpZiAodG8gPCBtaW50bykgdG8gPSBtaW50bzsKICAgICAgICAgIGlmICh0byAtIHMtPmJbcF0gPj0gQUxMSU5fVEhSICogbGVmdCkgb3V0W24rK10gPSAoQWN0KXtBX0FMTElOLCBzLT5iW3BdICsgbGVmdH07IGVsc2Ugb3V0W24rK10gPSAoQWN0KXtBX1JBSVNFLCB0b307CiAgICAgICAgfQogICAgICAgIGlmIChsZWZ0IDw9IEFERF9BTExJTiAqIChwb3QgKyB0b2NhbGwpKSBvdXRbbisrXSA9IChBY3Qpe0FfQUxMSU4sIHMtPmJbcF0gKyBsZWZ0fTsKICAgICAgfQogICAgfQogIH0KICBpbnQgbSA9IDA7CiAgZm9yIChpbnQgaSA9IDA7IGkgPCBuOyBpKyspIHsgaW50IGR1cCA9IDA7CiAgICBmb3IgKGludCBqID0gMDsgaiA8IG0gJiYgIWR1cDsgaisrKSB7CiAgICAgIGlmIChvdXRbaV0udHlwZSA8IEFfQkVUIHx8IG91dFtqXS50eXBlIDwgQV9CRVQpIGR1cCA9IG91dFtpXS50eXBlID09IG91dFtqXS50eXBlOwogICAgICBlbHNlIGR1cCA9IChvdXRbaV0udHlwZSA9PSBBX0FMTElOICYmIG91dFtqXS50eXBlID09IEFfQUxMSU4pIHx8IChvdXRbal0uYW10ID4gb3V0W2ldLmFtdCAtIC4wMWYgJiYgb3V0W2pdLmFtdCA8IG91dFtpXS5hbXQgKyAuMDFmKTsKICAgIH0KICAgIGlmICghZHVwKSBvdXRbbSsrXSA9IG91dFtpXTsgfQogIHJldHVybiBtOwp9CnN0YXRpYyB2b2lkIGJ1aWxkKGludCBuaSwgU3QgcykgewogIEFjdCBhY3RzWzE2XTsgaW50IG5hID0gZ2VuX2FjdGlvbnMoJnMsIGFjdHMpLCBwID0gcy5wbGF5ZXI7CiAgaW50IGZpcnN0ID0gTk47IE5OICs9IG5hOwogIHNpemVfdCBvZmYgPSBORjsgTkYgKz0gKHNpemVfdCkyICogbmEgKiBOSFtwXTsKICBpZiAoUEFTUyA9PSAxKSB7IE5vZGUgKm4gPSAmTk9ERVNbbmldOyBuLT50eXBlID0gTl9BQ1RJT047IG4tPnBsYXllciA9ICh1aW50OF90KXA7IG4tPm5hY3QgPSAodWludDhfdCluYTsgbi0+Y2hpbGQgPSBmaXJzdDsgbi0+ZGF0YSA9IChpbnQzMl90KW9mZjsgbi0+YzAgPSBzLmNbMF0gKyBzLmJbMF07IG4tPmMxID0gcy5jWzFdICsgcy5iWzFdOyBuLT5zdHJlZXQgPSAoaW50MTZfdClzLnN0cmVldDsgfQogIGZvciAoaW50IGsgPSAwOyBrIDwgbmE7IGsrKykgewogICAgaW50IGNpID0gZmlyc3QgKyBrOyBTdCB0ID0gczsgQWN0IGEgPSBhY3RzW2tdOwogICAgaWYgKFBBU1MgPT0gMSkgeyBOT0RFU1tjaV0uYWN0dHlwZSA9ICh1aW50OF90KWEudHlwZTsgTk9ERVNbY2ldLmFjdGFtdCA9IGEuYW10OyBOT0RFU1tjaV0uY2FyZCA9IC0xOyB9CiAgICBzd2l0Y2ggKGEudHlwZSkgewogICAgICBjYXNlIEFfRk9MRDogc2V0X3Rlcm0oY2ksIE5fRk9MRCwgcCwgJnQpOyBicmVhazsKICAgICAgY2FzZSBBX0NIRUNLOiBpZiAocCA9PSAwKSB7IHQucGxheWVyID0gMTsgdC5jaGVja2VkID0gMTsgYnVpbGQoY2ksIHQpOyB9IGVsc2UgZW5kX3N0cmVldChjaSwgdCk7IGJyZWFrOwogICAgICBjYXNlIEFfQ0FMTDogdC5iW3BdID0gYS5hbXQ7IGVuZF9zdHJlZXQoY2ksIHQpOyBicmVhazsKICAgICAgZGVmYXVsdDogdC5iW3BdID0gYS5hbXQ7IHQubmJldHMrKzsgdC5wbGF5ZXIgPSAxIC0gcDsgYnVpbGQoY2ksIHQpOyBicmVhazsKICAgIH0KICB9Cn0KCi8vIC0tLS0tLS0tLS0tLS0tLS0gc2V0dXAgLS0tLS0tLS0tLS0tLS0tLQovLyBjZmcgKGZsb2F0cyk6IFswXSBwb3QsIFsxXSBzdGFjaywgWzJdIHN0YXJ0IHN0cmVldCwgWzNdIG5ib2FyZCwgWzQuLjhdIGJvYXJkLCBbOV0gcmFrZSByYXRlLCBbMTBdIHJha2UgY2FwLAovLyBbMTFdIGFsbC1pbiB0aHJlc2hvbGQsIFsxMl0gYWRkLWFsbC1pbiByYXRpbzsgcGVyIHN0cmVldCBzICgxNiBmbG9hdHMgZnJvbSAxMysxNnMpOgovLyBtYXhiZXRzLCBuX29vcCwgb29wWzRdLCBuX2lwLCBpcFs0XSwgbl9yYWlzZSwgcmFpc2VbNF0Kc3RhdGljIGZsb2F0ICpDRkcsICpXSU47CkVYUE9SVCgicGZfY2ZnX3B0ciIpIGZsb2F0ICpwZl9jZmdfcHRyKHZvaWQpIHsgaWYgKCFDRkcpIENGRyA9IHhhbGxvYyhzaXplb2YoZmxvYXQpICogNjQpOyByZXR1cm4gQ0ZHOyB9CkVYUE9SVCgicGZfd2luX3B0ciIpIGZsb2F0ICpwZl93aW5fcHRyKHZvaWQpIHsgaWYgKCFXSU4pIFdJTiA9IHhhbGxvYyhzaXplb2YoZmxvYXQpICogMiAqIDEzMjYpOyByZXR1cm4gV0lOOyB9CnN0YXRpYyB2b2lkIHJlYWRfY2ZnKHZvaWQpIHsKICBQMCA9IENGR1swXTsgU1RLID0gQ0ZHWzFdOyBTVEFSVF9TVCA9IChpbnQpQ0ZHWzJdOyBOQjAgPSAoaW50KUNGR1szXTsKICBmb3IgKGludCBpID0gMDsgaSA8IDU7IGkrKykgQk9BUkQwW2ldID0gaSA8IE5CMCA/ICh1aW50OF90KUNGR1s0ICsgaV0gOiAwOwogIFJBS0VfUiA9IENGR1s5XTsgUkFLRV9DQVAgPSBDRkdbMTBdOyBBTExJTl9USFIgPSBDRkdbMTFdID4gMCA/IENGR1sxMV0gOiAuNjdmOyBBRERfQUxMSU4gPSBDRkdbMTJdOwogIGZvciAoaW50IHMgPSAwOyBzIDwgMzsgcysrKSB7IGNvbnN0IGZsb2F0ICpjID0gQ0ZHICsgMTMgKyAxNiAqIHM7CiAgICBNQVhCRVRTW3NdID0gKGludCljWzBdOyBOQkVUU1tzXVswXSA9IChpbnQpY1sxXTsgZm9yIChpbnQgaSA9IDA7IGkgPCA0OyBpKyspIEJFVFNbc11bMF1baV0gPSBjWzIgKyBpXTsKICAgIE5CRVRTW3NdWzFdID0gKGludCljWzZdOyBmb3IgKGludCBpID0gMDsgaSA8IDQ7IGkrKykgQkVUU1tzXVsxXVtpXSA9IGNbNyArIGldOwogICAgTlJBSVNFU1tzXSA9IChpbnQpY1sxMV07IGZvciAoaW50IGkgPSAwOyBpIDwgNDsgaSsrKSBSQUlTRVNbc11baV0gPSBjWzEyICsgaV07IH0KfQpzdGF0aWMgU3Qgcm9vdF9zdGF0ZSh2b2lkKSB7IFN0IHM7IG1lbXNldCgmcywgMCwgc2l6ZW9mIHMpOyBzLnN0cmVldCA9IFNUQVJUX1NUOyBzLnBsYXllciA9IDA7IG1lbWNweShzLmJvYXJkLCBCT0FSRDAsIDUpOyBzLm5iID0gTkIwOyByZXR1cm4gczsgfQpzdGF0aWMgdm9pZCBzaGVsbF9zb3J0KHVpbnQzMl90ICpzdHIsIGludDMyX3QgKmlkeCwgaW50IG4pIHsKICBzdGF0aWMgY29uc3QgaW50IGdhcHNbXSA9IHs3MDEsIDMwMSwgMTMyLCA1NywgMjMsIDEwLCA0LCAxfTsKICBmb3IgKGludCBnID0gMDsgZyA8IDg7IGcrKykgeyBpbnQgZ2FwID0gZ2Fwc1tnXTsgZm9yIChpbnQgaSA9IGdhcDsgaSA8IG47IGkrKykgeyB1aW50MzJfdCBzID0gc3RyW2ldOyBpbnQzMl90IHggPSBpZHhbaV07IGludCBqID0gaTsgd2hpbGUgKGogPj0gZ2FwICYmIHN0cltqIC0gZ2FwXSA+IHMpIHsgc3RyW2pdID0gc3RyW2ogLSBnYXBdOyBpZHhbal0gPSBpZHhbaiAtIGdhcF07IGogLT0gZ2FwOyB9IHN0cltqXSA9IHM7IGlkeFtqXSA9IHg7IH0gfQp9CnN0YXRpYyB2b2lkIGNvdW50X3RyZWUodm9pZCkgeyBmb3IgKGludCBpID0gMDsgaSA8IDUyICogNTI7IGkrKykgVEJMTUFQW2ldID0gLTE7IE5UQkwgPSAwOyBQQVNTID0gMDsgTk4gPSAxOyBORiA9IDA7IGJ1aWxkKDAsIHJvb3Rfc3RhdGUoKSk7IH0Kc3RhdGljIGludCB2YWxpZF9jb21ibyhpbnQgcCwgaW50IGEsIGludCBiKSB7IHJldHVybiBXSU5bcCAqIDEzMjYgKyBjb21ib19pbmRleChhLCBiKV0gPiAwICYmICFvbl9ib2FyZChCT0FSRDAsIE5CMCwgYSkgJiYgIW9uX2JvYXJkKEJPQVJEMCwgTkIwLCBiKTsgfQpzdGF0aWMgaW50IG1ha2VfaGFuZHModm9pZCkgewogIGZvciAoaW50IHAgPSAwOyBwIDwgMjsgcCsrKSB7CiAgICBpbnQgbiA9IDA7IGZvciAoaW50IGIgPSAxOyBiIDwgNTI7IGIrKykgZm9yIChpbnQgYSA9IDA7IGEgPCBiOyBhKyspIG4gKz0gdmFsaWRfY29tYm8ocCwgYSwgYik7CiAgICBOSFtwXSA9IG47IEhDW3BdID0geGFsbG9jKChzaXplX3QpMiAqIG4gKyAxNik7IFdbcF0gPSB4YWxsb2Moc2l6ZW9mKGZsb2F0KSAqIG4gKyAxNik7IFNBTUVbcF0gPSB4YWxsb2Moc2l6ZW9mKGludDMyX3QpICogbiArIDE2KTsKICAgIGlmICghSENbcF0gfHwgIVdbcF0gfHwgIVNBTUVbcF0pIHJldHVybiAtMTsKICAgIG4gPSAwOwogICAgZm9yIChpbnQgYiA9IDE7IGIgPCA1MjsgYisrKSBmb3IgKGludCBhID0gMDsgYSA8IGI7IGErKykgaWYgKHZhbGlkX2NvbWJvKHAsIGEsIGIpKSB7IEhDW3BdWzIgKiBuXSA9ICh1aW50OF90KWE7IEhDW3BdWzIgKiBuICsgMV0gPSAodWludDhfdCliOyBXW3BdW25dID0gV0lOW3AgKiAxMzI2ICsgY29tYm9faW5kZXgoYSwgYildOyBuKys7IH0KICB9CiAgc3RhdGljIGludDMyX3QgcG9zWzEzMjZdOwogIGZvciAoaW50IHAgPSAwOyBwIDwgMjsgcCsrKSB7CiAgICBmb3IgKGludCBpID0gMDsgaSA8IDEzMjY7IGkrKykgcG9zW2ldID0gLTE7CiAgICBmb3IgKGludCBnID0gMDsgZyA8IE5IWzEgLSBwXTsgZysrKSBwb3NbY29tYm9faW5kZXgoSENbMSAtIHBdWzIgKiBnXSwgSENbMSAtIHBdWzIgKiBnICsgMV0pXSA9IGc7CiAgICBmb3IgKGludCBoID0gMDsgaCA8IE5IW3BdOyBoKyspIFNBTUVbcF1baF0gPSBwb3NbY29tYm9faW5kZXgoSENbcF1bMiAqIGhdLCBIQ1twXVsyICogaCArIDFdKV07CiAgfQogIEhNQVggPSBOSFswXSA+IE5IWzFdID8gTkhbMF0gOiBOSFsxXTsKICByZXR1cm4gMDsKfQpzdGF0aWMgZG91YmxlIEVTVF9CWVRFUzsgc3RhdGljIGludCBFU1RfTk9ERVM7CkVYUE9SVCgicGZfZXN0aW1hdGUiKSBkb3VibGUgcGZfZXN0aW1hdGUodm9pZCkgewogIHJlYWRfY2ZnKCk7CiAgZm9yIChpbnQgcCA9IDA7IHAgPCAyOyBwKyspIHsgaW50IG4gPSAwOyBmb3IgKGludCBiID0gMTsgYiA8IDUyOyBiKyspIGZvciAoaW50IGEgPSAwOyBhIDwgYjsgYSsrKSBuICs9IHZhbGlkX2NvbWJvKHAsIGEsIGIpOyBOSFtwXSA9IG47IH0KICBjb3VudF90cmVlKCk7IEVTVF9OT0RFUyA9IE5OOwogIEVTVF9CWVRFUyA9IChkb3VibGUpTk4gKiAoc2l6ZW9mKE5vZGUpICsgOCkgKyAoZG91YmxlKU5GICogMiArIChkb3VibGUpTlRCTCAqIChOSFswXSArIE5IWzFdKSAqIDggKyA4ZTY7CiAgcmV0dXJuIEVTVF9CWVRFUzsKfQpFWFBPUlQoInBmX2VzdF9ub2RlcyIpIGludCBwZl9lc3Rfbm9kZXModm9pZCkgeyByZXR1cm4gRVNUX05PREVTOyB9CkVYUE9SVCgicGZfZXN0X2Zsb2F0cyIpIGRvdWJsZSBwZl9lc3RfZmxvYXRzKHZvaWQpIHsgcmV0dXJuIChkb3VibGUpTkY7IH0KRVhQT1JUKCJwZl9yZXNldCIpIHZvaWQgcGZfcmVzZXQodm9pZCkgeyBoZWFwX3Jlc2V0KCk7IENGRyA9IDA7IFdJTiA9IDA7IE5PREVTID0gMDsgQVJFTkEgPSAwOyB9CnN0YXRpYyBpbnQgSVRFUjsgc3RhdGljIGZsb2F0ICpRQlVGOyBzdGF0aWMgc2l6ZV90IFFDQVA7IHN0YXRpYyBmbG9hdCAqUkVBQ0hCVUYsICpWQUxCVUY7IHN0YXRpYyBzaXplX3QgVkFMQ0FQOwpFWFBPUlQoInBmX3NldHVwIikgaW50IHBmX3NldHVwKHZvaWQpIHsKICBRQlVGID0gMDsgUUNBUCA9IDA7IFJFQUNIQlVGID0gMDsgVkFMQlVGID0gMDsgVkFMQ0FQID0gMDsKICByZWFkX2NmZygpOwogIGlmIChtYWtlX2hhbmRzKCkpIHJldHVybiAtMTsKICBjb3VudF90cmVlKCk7IE5OT0RFUyA9IE5OOyBORkxPQVRTID0gTkY7CiAgTk9ERVMgPSB4YWxsb2Moc2l6ZW9mKE5vZGUpICogKHNpemVfdClOTk9ERVMpOyBpZiAoIU5PREVTKSByZXR1cm4gLTI7CiAgQVJFTkEgPSB4YWxsb2Moc2l6ZW9mKGludDE2X3QpICogTkZMT0FUUyArIDE2KTsgaWYgKCFBUkVOQSkgcmV0dXJuIC0zOwogIG1lbXNldChBUkVOQSwgMCwgc2l6ZW9mKGludDE2X3QpICogTkZMT0FUUyk7CiAgU0NBTEUgPSB4YWxsb2Moc2l6ZW9mKGZsb2F0KSAqIDIgKiAoc2l6ZV90KU5OT0RFUyArIDE2KTsgaWYgKCFTQ0FMRSkgcmV0dXJuIC0zOwogIG1lbXNldChTQ0FMRSwgMCwgc2l6ZW9mKGZsb2F0KSAqIDIgKiAoc2l6ZV90KU5OT0RFUyk7CiAgVEJMQk9BUkQgPSB4YWxsb2MoNSAqIChzaXplX3QpKE5UQkwgKyAxKSk7IGlmICghVEJMQk9BUkQpIHJldHVybiAtNDsKICBmb3IgKGludCBpID0gMDsgaSA8IDUyICogNTI7IGkrKykgVEJMTUFQW2ldID0gLTE7IE5UQkwgPSAwOwogIFBBU1MgPSAxOyBOTiA9IDE7IE5GID0gMDsKICBOT0RFU1swXS5hY3R0eXBlID0gMjU1OyBOT0RFU1swXS5jYXJkID0gLTE7IE5PREVTWzBdLmFjdGFtdCA9IDA7CiAgYnVpbGQoMCwgcm9vdF9zdGF0ZSgpKTsKICBmb3IgKGludCBwID0gMDsgcCA8IDI7IHArKykgewogICAgVEJMX09GRltwXSA9IHhhbGxvYyhzaXplb2YoaW50MzJfdCkgKiAoc2l6ZV90KShOVEJMICsgMSkpOyBUQkxfTltwXSA9IHhhbGxvYyhzaXplb2YoaW50MzJfdCkgKiAoc2l6ZV90KShOVEJMICsgMSkpOwogICAgVEJMX0lEWFtwXSA9IHhhbGxvYyhzaXplb2YoaW50MzJfdCkgKiAoc2l6ZV90KU5UQkwgKiBOSFtwXSArIDE2KTsgVEJMX1NUUltwXSA9IHhhbGxvYyhzaXplb2YodWludDMyX3QpICogKHNpemVfdClOVEJMICogTkhbcF0gKyAxNik7CiAgICBpZiAoIVRCTF9PRkZbcF0gfHwgIVRCTF9OW3BdIHx8ICFUQkxfSURYW3BdIHx8ICFUQkxfU1RSW3BdKSByZXR1cm4gLTU7CiAgICBpbnQgb2ZmID0gMDsKICAgIGZvciAoaW50IHQgPSAwOyB0IDwgTlRCTDsgdCsrKSB7CiAgICAgIHVpbnQ4X3QgYzdbN107IG1lbWNweShjNywgVEJMQk9BUkRbdF0sIDUpOyBpbnQgbiA9IDA7CiAgICAgIGZvciAoaW50IGggPSAwOyBoIDwgTkhbcF07IGgrKykgeyBpbnQgYSA9IEhDW3BdWzIgKiBoXSwgYiA9IEhDW3BdWzIgKiBoICsgMV07IGlmIChvbl9ib2FyZChUQkxCT0FSRFt0XSwgNSwgYSkgfHwgb25fYm9hcmQoVEJMQk9BUkRbdF0sIDUsIGIpKSBjb250aW51ZTsKICAgICAgICBjN1s1XSA9ICh1aW50OF90KWE7IGM3WzZdID0gKHVpbnQ4X3QpYjsgVEJMX1NUUltwXVtvZmYgKyBuXSA9IGV2YWw3KGM3KTsgVEJMX0lEWFtwXVtvZmYgKyBuXSA9IGg7IG4rKzsgfQogICAgICBzaGVsbF9zb3J0KFRCTF9TVFJbcF0gKyBvZmYsIFRCTF9JRFhbcF0gKyBvZmYsIG4pOwogICAgICBUQkxfT0ZGW3BdW3RdID0gb2ZmOyBUQkxfTltwXVt0XSA9IG47IG9mZiArPSBuOwogICAgfQogIH0KICBTQ1JfQ0FQID0gKHNpemVfdCk2NCAqIDE2ICogKEhNQVggKyA4KTsgU0NSQVRDSCA9IHhhbGxvYyhzaXplb2YoZmxvYXQpICogU0NSX0NBUCk7IGlmICghU0NSQVRDSCkgcmV0dXJuIC02OwogIElURVIgPSAwOwogIHJldHVybiBOTk9ERVM7Cn0KCi8vIC0tLS0tLS0tLS0tLS0tLS0gQ0ZSIC0tLS0tLS0tLS0tLS0tLS0Kc3RhdGljIGZsb2F0IERQT1MsIERORUcsIEdBTTsKc3RhdGljIHZvaWQgY2FyZF9zdW1zKGNvbnN0IGZsb2F0ICpyZWFjaCwgaW50IG8sIGZsb2F0ICpjcywgZmxvYXQgKnRvdCkgewogIGZvciAoaW50IGMgPSAwOyBjIDwgNTI7IGMrKykgY3NbY10gPSAwOyBmbG9hdCB0ID0gMDsKICBmb3IgKGludCBnID0gMDsgZyA8IE5IW29dOyBnKyspIHsgZmxvYXQgciA9IHJlYWNoW2ddOyBpZiAociA9PSAwKSBjb250aW51ZTsgdCArPSByOyBjc1tIQ1tvXVsyICogZ11dICs9IHI7IGNzW0hDW29dWzIgKiBnICsgMV1dICs9IHI7IH0KICAqdG90ID0gdDsKfQpzdGF0aWMgZmxvYXQgcmFrZV9vZihmbG9hdCBwb3QpIHsgZmxvYXQgciA9IHBvdCAqIFJBS0VfUjsgcmV0dXJuIHIgPiBSQUtFX0NBUCA/IFJBS0VfQ0FQIDogcjsgfQpzdGF0aWMgdm9pZCBldmFsX2ZvbGQoY29uc3QgTm9kZSAqbiwgaW50IHRyYXYsIGNvbnN0IGZsb2F0ICpyZWFjaCwgZmxvYXQgKm91dCkgewogIGludCBvID0gMSAtIHRyYXY7IGZsb2F0IGNzWzUyXSwgdG90OyBjYXJkX3N1bXMocmVhY2gsIG8sIGNzLCAmdG90KTsKICBmbG9hdCBjdCA9IHRyYXYgPyBuLT5jMSA6IG4tPmMwLCBjbyA9IHRyYXYgPyBuLT5jMCA6IG4tPmMxLCBtbiA9IG4tPmMwIDwgbi0+YzEgPyBuLT5jMCA6IG4tPmMxOwogIGZsb2F0IHYgPSBuLT5wbGF5ZXIgPT0gdHJhdiA/IC1jdCA6IChQMCArIGNvIC0gcmFrZV9vZihQMCArIDIgKiBtbikpOwogIGZvciAoaW50IGggPSAwOyBoIDwgTkhbdHJhdl07IGgrKykgeyBpbnQgc20gPSBTQU1FW3RyYXZdW2hdOyBmbG9hdCBjID0gdG90IC0gY3NbSENbdHJhdl1bMiAqIGhdXSAtIGNzW0hDW3RyYXZdWzIgKiBoICsgMV1dICsgKHNtID49IDAgPyByZWFjaFtzbV0gOiAwKTsgb3V0W2hdID0gdiAqIGM7IH0KfQpzdGF0aWMgdm9pZCBldmFsX3Nob3coY29uc3QgTm9kZSAqbiwgaW50IHRyYXYsIGNvbnN0IGZsb2F0ICpyZWFjaCwgZmxvYXQgKm91dCkgewogIGludCBvID0gMSAtIHRyYXYsIHQgPSBuLT5kYXRhOwogIGNvbnN0IGludDMyX3QgKml0ID0gVEJMX0lEWFt0cmF2XSArIFRCTF9PRkZbdHJhdl1bdF0sICppbyA9IFRCTF9JRFhbb10gKyBUQkxfT0ZGW29dW3RdOwogIGNvbnN0IHVpbnQzMl90ICpzdCA9IFRCTF9TVFJbdHJhdl0gKyBUQkxfT0ZGW3RyYXZdW3RdLCAqc28gPSBUQkxfU1RSW29dICsgVEJMX09GRltvXVt0XTsKICBpbnQgbnQgPSBUQkxfTlt0cmF2XVt0XSwgbm8gPSBUQkxfTltvXVt0XTsKICBmbG9hdCBjID0gdHJhdiA/IG4tPmMxIDogbi0+YzAsIHJrID0gcmFrZV9vZihQMCArIG4tPmMwICsgbi0+YzEpOwogIGZsb2F0IHZ3ID0gUDAgKyBjIC0gcmssIHZsID0gLWMsIHZ0ID0gKFAwIC0gcmspICogLjVmOwogIHNpemVfdCBtYXJrID0gU0NSX1RPUDsgZmxvYXQgKndpbiA9IHNjcihOSFt0cmF2XSk7CiAgZm9yIChpbnQgaCA9IDA7IGggPCBOSFt0cmF2XTsgaCsrKSBvdXRbaF0gPSAwOwogIGZsb2F0IGNzWzUyXSwgdG90ID0gMCwgY3N0WzUyXSwgdG90dDsgZm9yIChpbnQgayA9IDA7IGsgPCA1MjsgaysrKSBjc1trXSA9IDA7CiAgY2FyZF9zdW1zKHJlYWNoLCBvLCBjc3QsICZ0b3R0KTsKICBpbnQgaiA9IDA7CiAgZm9yIChpbnQgaSA9IDA7IGkgPCBudDsgKSB7CiAgICB1aW50MzJfdCBzID0gc3RbaV07IHdoaWxlIChqIDwgbm8gJiYgc29bal0gPCBzKSB7IGludCBnID0gaW9bal07IGZsb2F0IHIgPSByZWFjaFtnXTsgdG90ICs9IHI7IGNzW0hDW29dWzIgKiBnXV0gKz0gcjsgY3NbSENbb11bMiAqIGcgKyAxXV0gKz0gcjsgaisrOyB9CiAgICBmb3IgKDsgaSA8IG50ICYmIHN0W2ldID09IHM7IGkrKykgeyBpbnQgaCA9IGl0W2ldOyB3aW5baF0gPSB0b3QgLSBjc1tIQ1t0cmF2XVsyICogaF1dIC0gY3NbSENbdHJhdl1bMiAqIGggKyAxXV07IH0KICB9CiAgdG90ID0gMDsgZm9yIChpbnQgayA9IDA7IGsgPCA1MjsgaysrKSBjc1trXSA9IDA7IGogPSBubyAtIDE7CiAgZm9yIChpbnQgaSA9IG50IC0gMTsgaSA+PSAwOyApIHsKICAgIHVpbnQzMl90IHMgPSBzdFtpXTsgd2hpbGUgKGogPj0gMCAmJiBzb1tqXSA+IHMpIHsgaW50IGcgPSBpb1tqXTsgZmxvYXQgciA9IHJlYWNoW2ddOyB0b3QgKz0gcjsgY3NbSENbb11bMiAqIGddXSArPSByOyBjc1tIQ1tvXVsyICogZyArIDFdXSArPSByOyBqLS07IH0KICAgIGZvciAoOyBpID49IDAgJiYgc3RbaV0gPT0gczsgaS0tKSB7IGludCBoID0gaXRbaV07IGludCBhID0gSENbdHJhdl1bMiAqIGhdLCBiID0gSENbdHJhdl1bMiAqIGggKyAxXSwgc20gPSBTQU1FW3RyYXZdW2hdOwogICAgICBmbG9hdCBsb3NlID0gdG90IC0gY3NbYV0gLSBjc1tiXSwgYWxsID0gdG90dCAtIGNzdFthXSAtIGNzdFtiXSArIChzbSA+PSAwID8gcmVhY2hbc21dIDogMCksIHRpZSA9IGFsbCAtIGxvc2UgLSB3aW5baF07IGlmICh0aWUgPCAwKSB0aWUgPSAwOwogICAgICBvdXRbaF0gPSB2dyAqIHdpbltoXSArIHZsICogbG9zZSArIHZ0ICogdGllOyB9CiAgfQogIFNDUl9UT1AgPSBtYXJrOwp9CnN0YXRpYyB2b2lkIGRlY29kZV9yKGNvbnN0IGludDE2X3QgKlIxNiwgZmxvYXQgc2MsIHNpemVfdCBuLCBmbG9hdCAqb3V0KSB7IGZsb2F0IGsgPSBzYyAqICgxLmYgLyAzMjc2Ny5mKTsgZm9yIChzaXplX3QgaSA9IDA7IGkgPCBuOyBpKyspIG91dFtpXSA9IChmbG9hdClSMTZbaV0gKiBrOyB9CnN0YXRpYyB2b2lkIGVuY29kZV9yKGNvbnN0IGZsb2F0ICpSLCBzaXplX3QgbiwgaW50MTZfdCAqUjE2LCBmbG9hdCAqc2MpIHsKICBmbG9hdCBtID0gMDsgZm9yIChzaXplX3QgaSA9IDA7IGkgPCBuOyBpKyspIHsgZmxvYXQgYSA9IFJbaV0gPCAwID8gLVJbaV0gOiBSW2ldOyBpZiAoYSA+IG0pIG0gPSBhOyB9CiAgKnNjID0gbTsgaWYgKG0gPD0gMCkgeyBmb3IgKHNpemVfdCBpID0gMDsgaSA8IG47IGkrKykgUjE2W2ldID0gMDsgcmV0dXJuOyB9CiAgZmxvYXQgayA9IDMyNzY3LmYgLyBtOyBmb3IgKHNpemVfdCBpID0gMDsgaSA8IG47IGkrKykgeyBmbG9hdCB4ID0gUltpXSAqIGs7IFIxNltpXSA9IChpbnQxNl90KSh4ID49IDAgPyB4ICsgLjVmIDogeCAtIC41Zik7IH0KfQpzdGF0aWMgdm9pZCBlbmNvZGVfcyhjb25zdCBmbG9hdCAqUywgc2l6ZV90IG4sIGludDE2X3QgKlMxNiwgZmxvYXQgKnNjKSB7IC8vIG5vbi1uZWdhdGl2ZSwgc3RvcmVkIGFzIHVpbnQxNiBiaXRzCiAgZmxvYXQgbSA9IDA7IGZvciAoc2l6ZV90IGkgPSAwOyBpIDwgbjsgaSsrKSBpZiAoU1tpXSA+IG0pIG0gPSBTW2ldOwogICpzYyA9IG07IHVpbnQxNl90ICp1ID0gKHVpbnQxNl90ICopUzE2OyBpZiAobSA8PSAwKSB7IGZvciAoc2l6ZV90IGkgPSAwOyBpIDwgbjsgaSsrKSB1W2ldID0gMDsgcmV0dXJuOyB9CiAgZmxvYXQgayA9IDY1NTM1LmYgLyBtOyBmb3IgKHNpemVfdCBpID0gMDsgaSA8IG47IGkrKykgdVtpXSA9ICh1aW50MTZfdCkoU1tpXSAqIGsgKyAuNWYpOwp9CnN0YXRpYyB2b2lkIHJlZ3JldF9tYXRjaChjb25zdCBmbG9hdCAqUiwgaW50IG5hLCBpbnQgSCwgZmxvYXQgKnNpZykgewogIGZvciAoaW50IGggPSAwOyBoIDwgSDsgaCsrKSB7IGZsb2F0IHMgPSAwOyBmb3IgKGludCBhID0gMDsgYSA8IG5hOyBhKyspIHsgZmxvYXQgciA9IFJbYSAqIEggKyBoXTsgaWYgKHIgPiAwKSBzICs9IHI7IH0KICAgIGlmIChzID4gMCkgeyBmbG9hdCBpbnYgPSAxIC8gczsgZm9yIChpbnQgYSA9IDA7IGEgPCBuYTsgYSsrKSB7IGZsb2F0IHIgPSBSW2EgKiBIICsgaF07IHNpZ1thICogSCArIGhdID0gciA+IDAgPyByICogaW52IDogMDsgfSB9CiAgICBlbHNlIHsgZmxvYXQgdSA9IDEuZiAvIG5hOyBmb3IgKGludCBhID0gMDsgYSA8IG5hOyBhKyspIHNpZ1thICogSCArIGhdID0gdTsgfSB9Cn0Kc3RhdGljIHZvaWQgYXZnX3N0cmF0KGNvbnN0IGludDE2X3QgKlMxNiwgaW50IG5hLCBpbnQgSCwgZmxvYXQgKnNpZykgewogIGNvbnN0IHVpbnQxNl90ICpTID0gKGNvbnN0IHVpbnQxNl90ICopUzE2OwogIGZvciAoaW50IGggPSAwOyBoIDwgSDsgaCsrKSB7IGZsb2F0IHMgPSAwOyBmb3IgKGludCBhID0gMDsgYSA8IG5hOyBhKyspIHMgKz0gKGZsb2F0KVNbYSAqIEggKyBoXTsKICAgIGlmIChzID4gMCkgeyBmbG9hdCBpbnYgPSAxIC8gczsgZm9yIChpbnQgYSA9IDA7IGEgPCBuYTsgYSsrKSBzaWdbYSAqIEggKyBoXSA9IChmbG9hdClTW2EgKiBIICsgaF0gKiBpbnY7IH0KICAgIGVsc2UgeyBmbG9hdCB1ID0gMS5mIC8gbmE7IGZvciAoaW50IGEgPSAwOyBhIDwgbmE7IGErKykgc2lnW2EgKiBIICsgaF0gPSB1OyB9IH0KfQovLyBtb2RlIDA6IENGUiB1cGRhdGU7IDE6IGJlc3QgcmVzcG9uc2UgKHRyYXZlcnNlciBtYXhpbWlzZXMsIG9wcG9uZW50IGF2ZXJhZ2UpOyAyOiB2YWx1ZSBvZiB0aGUgYXZlcmFnZSBzdHJhdGVnaWVzCnN0YXRpYyB2b2lkIHdhbGsoaW50IG5pLCBpbnQgdHJhdiwgY29uc3QgZmxvYXQgKnJlYWNoLCBmbG9hdCAqb3V0LCBpbnQgbW9kZSkgewogIGNvbnN0IE5vZGUgKm4gPSAmTk9ERVNbbmldOyBpbnQgbyA9IDEgLSB0cmF2LCBIdCA9IE5IW3RyYXZdLCBIbyA9IE5IW29dOwogIGlmIChuLT50eXBlID09IE5fRk9MRCkgeyBldmFsX2ZvbGQobiwgdHJhdiwgcmVhY2gsIG91dCk7IHJldHVybjsgfQogIGlmIChuLT50eXBlID09IE5fU0hPVykgeyBldmFsX3Nob3cobiwgdHJhdiwgcmVhY2gsIG91dCk7IHJldHVybjsgfQogIHNpemVfdCBtYXJrID0gU0NSX1RPUDsKICBpZiAobi0+dHlwZSA9PSBOX0NIQU5DRSkgewogICAgaW50IG5jID0gbi0+ZGF0YTsgZmxvYXQgKnIyID0gc2NyKEhvKSwgKnRtcCA9IHNjcihIdCk7CiAgICBmb3IgKGludCBoID0gMDsgaCA8IEh0OyBoKyspIG91dFtoXSA9IDA7CiAgICBmbG9hdCBmID0gMS5mIC8gKGZsb2F0KSg1MiAtICgzICsgbi0+c3RyZWV0KSAtIDQpOwogICAgZm9yIChpbnQgayA9IDA7IGsgPCBuYzsgaysrKSB7CiAgICAgIGludCBjaSA9IG4tPmNoaWxkICsgaywgYyA9IE5PREVTW2NpXS5jYXJkOwogICAgICBmb3IgKGludCBnID0gMDsgZyA8IEhvOyBnKyspIHIyW2ddID0gKEhDW29dWzIgKiBnXSA9PSBjIHx8IEhDW29dWzIgKiBnICsgMV0gPT0gYykgPyAwIDogcmVhY2hbZ107CiAgICAgIHdhbGsoY2ksIHRyYXYsIHIyLCB0bXAsIG1vZGUpOwogICAgICBmb3IgKGludCBoID0gMDsgaCA8IEh0OyBoKyspIGlmIChIQ1t0cmF2XVsyICogaF0gIT0gYyAmJiBIQ1t0cmF2XVsyICogaCArIDFdICE9IGMpIG91dFtoXSArPSB0bXBbaF07CiAgICB9CiAgICBmb3IgKGludCBoID0gMDsgaCA8IEh0OyBoKyspIG91dFtoXSAqPSBmOwogICAgU0NSX1RPUCA9IG1hcms7IHJldHVybjsKICB9CiAgaW50IG5hID0gbi0+bmFjdCwgcCA9IG4tPnBsYXllciwgSCA9IE5IW3BdOyBzaXplX3QgbmggPSAoc2l6ZV90KW5hICogSDsKICBpbnQxNl90ICpSMTYgPSBBUkVOQSArIG4tPmRhdGEsICpTMTYgPSBSMTYgKyBuaDsgZmxvYXQgKnNjID0gU0NBTEUgKyAyICogKHNpemVfdCluaTsKICBmbG9hdCAqc2lnID0gc2NyKG5oKSwgKlJmID0gMDsKICBpZiAobW9kZSA9PSAwKSB7IFJmID0gc2NyKG5oKTsgZGVjb2RlX3IoUjE2LCBzY1swXSwgbmgsIFJmKTsgcmVncmV0X21hdGNoKFJmLCBuYSwgSCwgc2lnKTsgfSBlbHNlIGF2Z19zdHJhdChTMTYsIG5hLCBILCBzaWcpOwogIGlmIChwID09IHRyYXYpIHsKICAgIGZsb2F0ICpjdiA9IHNjcihuaCk7CiAgICBmb3IgKGludCBhID0gMDsgYSA8IG5hOyBhKyspIHdhbGsobi0+Y2hpbGQgKyBhLCB0cmF2LCByZWFjaCwgY3YgKyAoc2l6ZV90KWEgKiBILCBtb2RlKTsKICAgIGlmIChtb2RlID09IDEpIHsgZm9yIChpbnQgaCA9IDA7IGggPCBIOyBoKyspIHsgZmxvYXQgbSA9IGN2W2hdOyBmb3IgKGludCBhID0gMTsgYSA8IG5hOyBhKyspIGlmIChjdlthICogSCArIGhdID4gbSkgbSA9IGN2W2EgKiBIICsgaF07IG91dFtoXSA9IG07IH0gfQogICAgZWxzZSB7IGZvciAoaW50IGggPSAwOyBoIDwgSDsgaCsrKSB7IGZsb2F0IHYgPSAwOyBmb3IgKGludCBhID0gMDsgYSA8IG5hOyBhKyspIHYgKz0gc2lnW2EgKiBIICsgaF0gKiBjdlthICogSCArIGhdOyBvdXRbaF0gPSB2OyB9IH0KICAgIGlmIChtb2RlID09IDApIHsKICAgICAgZm9yIChpbnQgYSA9IDA7IGEgPCBuYTsgYSsrKSB7IGZsb2F0ICpSYSA9IFJmICsgKHNpemVfdClhICogSCwgKmNhID0gY3YgKyAoc2l6ZV90KWEgKiBIOwogICAgICAgIGZvciAoaW50IGggPSAwOyBoIDwgSDsgaCsrKSB7IGZsb2F0IHIgPSBSYVtoXTsgciAqPSByID4gMCA/IERQT1MgOiBETkVHOyBSYVtoXSA9IHIgKyBjYVtoXSAtIG91dFtoXTsgfSB9CiAgICAgIGVuY29kZV9yKFJmLCBuaCwgUjE2LCAmc2NbMF0pOwogICAgICAvLyBzdHJhdGVneSBzdW1zOiBkZWNvZGUgKHJldXNlIFJmKSwgZGlzY291bnQsIGFkZCBjdXJyZW50IHN0cmF0ZWd5LCBlbmNvZGUKICAgICAgeyBjb25zdCB1aW50MTZfdCAqVSA9IChjb25zdCB1aW50MTZfdCAqKVMxNjsgZmxvYXQgayA9IHNjWzFdICogKDEuZiAvIDY1NTM1LmYpICogR0FNOyBmb3IgKHNpemVfdCBpID0gMDsgaSA8IG5oOyBpKyspIFJmW2ldID0gKGZsb2F0KVVbaV0gKiBrICsgc2lnW2ldOyB9CiAgICAgIGVuY29kZV9zKFJmLCBuaCwgUzE2LCAmc2NbMV0pOwogICAgfQogIH0gZWxzZSB7CiAgICBmbG9hdCAqcjIgPSBzY3IoSG8pLCAqdG1wID0gc2NyKEh0KTsKICAgIGZvciAoaW50IGggPSAwOyBoIDwgSHQ7IGgrKykgb3V0W2hdID0gMDsKICAgIGZvciAoaW50IGEgPSAwOyBhIDwgbmE7IGErKykgewogICAgICBjb25zdCBmbG9hdCAqc2EgPSBzaWcgKyAoc2l6ZV90KWEgKiBIbzsgZmxvYXQgYW55ID0gMDsKICAgICAgZm9yIChpbnQgZyA9IDA7IGcgPCBIbzsgZysrKSB7IGZsb2F0IHIgPSByZWFjaFtnXSAqIHNhW2ddOyByMltnXSA9IHI7IGFueSArPSByOyB9CiAgICAgIGlmIChhbnkgPD0gMCkgY29udGludWU7CiAgICAgIHdhbGsobi0+Y2hpbGQgKyBhLCB0cmF2LCByMiwgdG1wLCBtb2RlKTsKICAgICAgZm9yIChpbnQgaCA9IDA7IGggPCBIdDsgaCsrKSBvdXRbaF0gKz0gdG1wW2hdOwogICAgfQogIH0KICBTQ1JfVE9QID0gbWFyazsKfQpFWFBPUlQoInBmX2l0ZXJhdGUiKSB2b2lkIHBmX2l0ZXJhdGUodm9pZCkgewogIElURVIrKzsgZmxvYXQgdCA9IChmbG9hdClJVEVSLCB0YSA9IHQgKiBfX2J1aWx0aW5fc3FydGYodCk7CiAgRFBPUyA9IHRhIC8gKHRhICsgMSk7IERORUcgPSAuNWY7IEdBTSA9ICh0IC8gKHQgKyAxKSkgKiAodCAvICh0ICsgMSkpOwogIGZvciAoaW50IHRyYXYgPSAwOyB0cmF2IDwgMjsgdHJhdisrKSB7IFNDUl9UT1AgPSAwOyBmbG9hdCAqb3V0ID0gc2NyKE5IW3RyYXZdKTsgd2FsaygwLCB0cmF2LCBXWzEgLSB0cmF2XSwgb3V0LCAwKTsgfQp9CkVYUE9SVCgicGZfaXRlcmF0aW9ucyIpIGludCBwZl9pdGVyYXRpb25zKHZvaWQpIHsgcmV0dXJuIElURVI7IH0Kc3RhdGljIGRvdWJsZSB2YWx1ZV9vZihpbnQgdHJhdiwgaW50IG1vZGUpIHsKICBTQ1JfVE9QID0gMDsgZmxvYXQgKm91dCA9IHNjcihOSFt0cmF2XSk7IHdhbGsoMCwgdHJhdiwgV1sxIC0gdHJhdl0sIG91dCwgbW9kZSk7CiAgaW50IG8gPSAxIC0gdHJhdjsgZmxvYXQgY3NbNTJdLCB0b3Q7IGNhcmRfc3VtcyhXW29dLCBvLCBjcywgJnRvdCk7CiAgZG91YmxlIHYgPSAwLCB6ID0gMDsKICBmb3IgKGludCBoID0gMDsgaCA8IE5IW3RyYXZdOyBoKyspIHsgaW50IHNtID0gU0FNRVt0cmF2XVtoXTsgZG91YmxlIGMgPSB0b3QgLSBjc1tIQ1t0cmF2XVsyICogaF1dIC0gY3NbSENbdHJhdl1bMiAqIGggKyAxXV0gKyAoc20gPj0gMCA/IFdbb11bc21dIDogMCk7IHYgKz0gKGRvdWJsZSlXW3RyYXZdW2hdICogb3V0W2hdOyB6ICs9IChkb3VibGUpV1t0cmF2XVtoXSAqIGM7IH0KICByZXR1cm4geiA+IDAgPyB2IC8geiA6IDA7Cn0Kc3RhdGljIGRvdWJsZSBFVlNbMl07CkVYUE9SVCgicGZfZXhwbG9pdGFiaWxpdHkiKSBmbG9hdCBwZl9leHBsb2l0YWJpbGl0eSh2b2lkKSB7CiAgZG91YmxlIGJyMCA9IHZhbHVlX29mKDAsIDEpLCBicjEgPSB2YWx1ZV9vZigxLCAxKTsgRVZTWzBdID0gdmFsdWVfb2YoMCwgMik7IEVWU1sxXSA9IHZhbHVlX29mKDEsIDIpOwogIHJldHVybiAoZmxvYXQpKCgoYnIwIC0gRVZTWzBdKSArIChicjEgLSBFVlNbMV0pKSAqIC41IC8gUDAgKiAxMDApOwp9CkVYUE9SVCgicGZfZXYiKSBmbG9hdCBwZl9ldihpbnQgcCkgeyByZXR1cm4gKGZsb2F0KUVWU1twXTsgfQoKLy8gLS0tLS0tLS0tLS0tLS0tLSBxdWVyaWVzIC0tLS0tLS0tLS0tLS0tLS0KRVhQT1JUKCJwZl9udW1faGFuZHMiKSBpbnQgcGZfbnVtX2hhbmRzKGludCBwKSB7IHJldHVybiBOSFtwXTsgfQpFWFBPUlQoInBmX2hhbmRfY2FyZHMiKSB1aW50OF90ICpwZl9oYW5kX2NhcmRzKGludCBwKSB7IHJldHVybiBIQ1twXTsgfQpFWFBPUlQoInBmX2hhbmRfd2VpZ2h0cyIpIGZsb2F0ICpwZl9oYW5kX3dlaWdodHMoaW50IHApIHsgcmV0dXJuIFdbcF07IH0KRVhQT1JUKCJwZl9udW1fbm9kZXMiKSBpbnQgcGZfbnVtX25vZGVzKHZvaWQpIHsgcmV0dXJuIE5OT0RFUzsgfQpFWFBPUlQoInBmX21lbV91c2VkIikgZG91YmxlIHBmX21lbV91c2VkKHZvaWQpIHsgcmV0dXJuIChkb3VibGUpaGVhcF91c2VkKCk7IH0KRVhQT1JUKCJwZl9ub2RlX3R5cGUiKSBpbnQgcGZfbm9kZV90eXBlKGludCBpKSB7IHJldHVybiBOT0RFU1tpXS50eXBlOyB9CkVYUE9SVCgicGZfbm9kZV9wbGF5ZXIiKSBpbnQgcGZfbm9kZV9wbGF5ZXIoaW50IGkpIHsgcmV0dXJuIE5PREVTW2ldLnBsYXllcjsgfQpFWFBPUlQoInBmX25vZGVfbmFjdCIpIGludCBwZl9ub2RlX25hY3QoaW50IGkpIHsgcmV0dXJuIE5PREVTW2ldLnR5cGUgPT0gTl9DSEFOQ0UgPyBOT0RFU1tpXS5kYXRhIDogTk9ERVNbaV0ubmFjdDsgfQpFWFBPUlQoInBmX25vZGVfY2hpbGQiKSBpbnQgcGZfbm9kZV9jaGlsZChpbnQgaSkgeyByZXR1cm4gTk9ERVNbaV0uY2hpbGQ7IH0KRVhQT1JUKCJwZl9ub2RlX2FjdHR5cGUiKSBpbnQgcGZfbm9kZV9hY3R0eXBlKGludCBpKSB7IHJldHVybiBOT0RFU1tpXS5hY3R0eXBlOyB9CkVYUE9SVCgicGZfbm9kZV9hY3RhbXQiKSBmbG9hdCBwZl9ub2RlX2FjdGFtdChpbnQgaSkgeyByZXR1cm4gTk9ERVNbaV0uYWN0YW10OyB9CkVYUE9SVCgicGZfbm9kZV9jYXJkIikgaW50IHBmX25vZGVfY2FyZChpbnQgaSkgeyByZXR1cm4gTk9ERVNbaV0uY2FyZDsgfQpFWFBPUlQoInBmX25vZGVfc3RyZWV0IikgaW50IHBmX25vZGVfc3RyZWV0KGludCBpKSB7IHJldHVybiBOT0RFU1tpXS5zdHJlZXQ7IH0KRVhQT1JUKCJwZl9ub2RlX2MwIikgZmxvYXQgcGZfbm9kZV9jMChpbnQgaSkgeyByZXR1cm4gTk9ERVNbaV0uYzA7IH0KRVhQT1JUKCJwZl9ub2RlX2MxIikgZmxvYXQgcGZfbm9kZV9jMShpbnQgaSkgeyByZXR1cm4gTk9ERVNbaV0uYzE7IH0KRVhQT1JUKCJwZl9wb3QiKSBmbG9hdCBwZl9wb3Qodm9pZCkgeyByZXR1cm4gUDA7IH0KRVhQT1JUKCJwZl9zdHJhdGVneSIpIGZsb2F0ICpwZl9zdHJhdGVneShpbnQgaSkgewogIGNvbnN0IE5vZGUgKm4gPSAmTk9ERVNbaV07IGlmIChuLT50eXBlICE9IE5fQUNUSU9OKSByZXR1cm4gMDsKICBpbnQgbmEgPSBuLT5uYWN0LCBIID0gTkhbbi0+cGxheWVyXTsgc2l6ZV90IG5lZWQgPSAoc2l6ZV90KW5hICogSDsKICBpZiAobmVlZCA+IFFDQVApIHsgUUJVRiA9IHhhbGxvYyhzaXplb2YoZmxvYXQpICogbmVlZCk7IFFDQVAgPSBuZWVkOyB9CiAgYXZnX3N0cmF0KEFSRU5BICsgbi0+ZGF0YSArIChzaXplX3QpbmEgKiBILCBuYSwgSCwgUUJVRik7IHJldHVybiBRQlVGOwp9CkVYUE9SVCgicGZfcmVhY2hfcHRyIikgZmxvYXQgKnBmX3JlYWNoX3B0cih2b2lkKSB7IGlmICghUkVBQ0hCVUYpIFJFQUNIQlVGID0geGFsbG9jKHNpemVvZihmbG9hdCkgKiAxMzMwKTsgcmV0dXJuIFJFQUNIQlVGOyB9CkVYUE9SVCgicGZfdmFsdWVzIikgZmxvYXQgKnBmX3ZhbHVlcyhpbnQgbmksIGludCB0cmF2KSB7IC8vIEVWIChCQiwgcmVsYXRpdmUgdG8gdGhlIHN0YXJ0IG9mIHRoZSBzb2x2ZSkgb2YgZWFjaCBhY3Rpb24gZm9yIGVhY2ggaGFuZCBvZiB0cmF2CiAgY29uc3QgTm9kZSAqbiA9ICZOT0RFU1tuaV07IGlmIChuLT50eXBlICE9IE5fQUNUSU9OIHx8IG4tPnBsYXllciAhPSB0cmF2KSByZXR1cm4gMDsKICBpbnQgbmEgPSBuLT5uYWN0LCBIID0gTkhbdHJhdl0sIG8gPSAxIC0gdHJhdjsgc2l6ZV90IG5lZWQgPSAoc2l6ZV90KW5hICogSDsKICBpZiAobmVlZCA+IFZBTENBUCkgeyBWQUxCVUYgPSB4YWxsb2Moc2l6ZW9mKGZsb2F0KSAqIG5lZWQpOyBWQUxDQVAgPSBuZWVkOyB9CiAgZmxvYXQgY3NbNTJdLCB0b3Q7IGNhcmRfc3VtcyhSRUFDSEJVRiwgbywgY3MsICZ0b3QpOwogIGZvciAoaW50IGEgPSAwOyBhIDwgbmE7IGErKykgeyBTQ1JfVE9QID0gMDsgZmxvYXQgKnRtcCA9IHNjcihIKTsgd2FsayhuLT5jaGlsZCArIGEsIHRyYXYsIFJFQUNIQlVGLCB0bXAsIDIpOwogICAgZm9yIChpbnQgaCA9IDA7IGggPCBIOyBoKyspIHsgaW50IHNtID0gU0FNRVt0cmF2XVtoXTsgZmxvYXQgYyA9IHRvdCAtIGNzW0hDW3RyYXZdWzIgKiBoXV0gLSBjc1tIQ1t0cmF2XVsyICogaCArIDFdXSArIChzbSA+PSAwID8gUkVBQ0hCVUZbc21dIDogMCk7IFZBTEJVRlthICogSCArIGhdID0gYyA+IDFlLTlmID8gdG1wW2hdIC8gYyA6IDA7IH0gfQogIHJldHVybiBWQUxCVUY7Cn0KRVhQT1JUKCJwZl9ldmFsNyIpIHVpbnQzMl90IHBmX2V2YWw3KGludCBhLCBpbnQgYiwgaW50IGMsIGludCBkLCBpbnQgZSwgaW50IGYsIGludCBnKSB7IHVpbnQ4X3QgeFs3XSA9IHsodWludDhfdClhLCAodWludDhfdCliLCAodWludDhfdCljLCAodWludDhfdClkLCAodWludDhfdCllLCAodWludDhfdClmLCAodWludDhfdClnfTsgcmV0dXJuIGV2YWw3KHgpOyB9Cg==", PI_C = "Ly8gcGZsaWIuYyDigJQgY29tcHV0ZXMgZmxvcC1saWJyYXJ5IGVudHJpZXMgb24gYSBSYXNwYmVycnkgUGkgKG9yIGFueSBMaW51eC9NYWMpIGZvciB0aGUgcG9rZXIgcmV2aWV3IGFwcC4KLy8gQnVpbGQ6IGdjYyAtTzMgLW1hcmNoPW5hdGl2ZSAtbyBwZmxpYiBwZmxpYi5jIC1sbSAgICAgIChwZnNvbHZlLmMgbXVzdCBiZSBpbiB0aGUgc2FtZSBmb2xkZXIpCi8vIFJ1bjogICAuL3BmbGliIHBpLWF1ZnRyYWcudHh0IDxwYXJ0PiA8cGFydHM+IGVyZ2VibmlzLTxwYXJ0Pi5qc29ubAovLyBUaGUgam9iIGZpbGUgY29tZXMgZnJvbSB0aGUgYXBwICgiUGktQXVmdHJhZyBlcnN0ZWxsZW4iKTsgdGhlIHJlc3VsdCBmaWxlIGlzIGltcG9ydGVkIGluIHRoZSBhcHAuCi8vIFJlc3VtZXMgYXV0b21hdGljYWxseTogZmxvcHMgYWxyZWFkeSBpbiB0aGUgcmVzdWx0IGZpbGUgYXJlIHNraXBwZWQuCiNkZWZpbmUgTkFUSVZFCiNpbmNsdWRlICJwZnNvbHZlLmMiCiNpbmNsdWRlIDxzdGRpby5oPgojaW5jbHVkZSA8c3RyaW5nLmg+CiNpbmNsdWRlIDx0aW1lLmg+CiNpbmNsdWRlIDxzeXMvdGltZS5oPgoKI2RlZmluZSBNQVhTUE9UIDE2CnR5cGVkZWYgc3RydWN0IHsgY2hhciBpZFszMl07IGZsb2F0IGNmZ1s2NF07IGZsb2F0IHdbMiAqIDEzMjZdOyB9IFNwb3Q7CnN0YXRpYyBTcG90IFNQW01BWFNQT1RdOyBzdGF0aWMgaW50IE5TUDsKdHlwZWRlZiBzdHJ1Y3QgeyBpbnQgc3BvdDsgY2hhciBmbG9wWzhdOyB9IFRhc2s7CnN0YXRpYyBUYXNrICpUQVNLUzsgc3RhdGljIGludCBOVCwgQ0FQVDsKCnN0YXRpYyBkb3VibGUgbm93X21zKHZvaWQpIHsgc3RydWN0IHRpbWV2YWwgdHY7IGdldHRpbWVvZmRheSgmdHYsIDApOyByZXR1cm4gdHYudHZfc2VjICogMTAwMC4wICsgdHYudHZfdXNlYyAvIDEwMDAuMDsgfQpzdGF0aWMgaW50IGNhcmRfb2YoY29uc3QgY2hhciAqcykgeyBjb25zdCBjaGFyICpSID0gIjIzNDU2Nzg5VEpRS0EiLCAqUyA9ICJjZGhzIjsgY29uc3QgY2hhciAqciA9IHN0cmNocihSLCBzWzBdKSwgKnUgPSBzdHJjaHIoUywgc1sxXSk7IHJldHVybiByICYmIHUgPyAoaW50KShyIC0gUikgKiA0ICsgKGludCkodSAtIFMpIDogLTE7IH0Kc3RhdGljIGNvbnN0IGNoYXIgQjY0W10gPSAiQUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWZnaGlqa2xtbm9wcXJzdHV2d3h5ejAxMjM0NTY3ODkrLyI7CnN0YXRpYyB2b2lkIGI2NChGSUxFICpmLCBjb25zdCB1bnNpZ25lZCBjaGFyICpwLCBzaXplX3QgbikgewogIGZvciAoc2l6ZV90IGkgPSAwOyBpIDwgbjsgaSArPSAzKSB7CiAgICB1bnNpZ25lZCB2ID0gcFtpXSA8PCAxNiB8IChpICsgMSA8IG4gPyBwW2kgKyAxXSA8PCA4IDogMCkgfCAoaSArIDIgPCBuID8gcFtpICsgMl0gOiAwKTsKICAgIGZwdXRjKEI2NFt2ID4+IDE4ICYgNjNdLCBmKTsgZnB1dGMoQjY0W3YgPj4gMTIgJiA2M10sIGYpOyBmcHV0YyhpICsgMSA8IG4gPyBCNjRbdiA+PiA2ICYgNjNdIDogJz0nLCBmKTsgZnB1dGMoaSArIDIgPCBuID8gQjY0W3YgJiA2M10gOiAnPScsIGYpOwogIH0KfQpzdGF0aWMgaW50IHJlYWRfam9iKGNvbnN0IGNoYXIgKmZuKSB7CiAgRklMRSAqZiA9IGZvcGVuKGZuLCAiciIpOyBpZiAoIWYpIHsgcGVycm9yKGZuKTsgcmV0dXJuIC0xOyB9CiAgc3RhdGljIGNoYXIgbGluZVsyMDAwMDBdOyBpbnQgY3VyID0gLTE7CiAgd2hpbGUgKGZnZXRzKGxpbmUsIHNpemVvZiBsaW5lLCBmKSkgewogICAgaWYgKCFzdHJuY21wKGxpbmUsICJTUE9UICIsIDUpKSB7IGlmIChOU1AgPj0gTUFYU1BPVCkgYnJlYWs7IGN1ciA9IE5TUCsrOyBzc2NhbmYobGluZSArIDUsICIlMzFzIiwgU1BbY3VyXS5pZCk7IH0KICAgIGVsc2UgaWYgKCFzdHJuY21wKGxpbmUsICJDRkcgIiwgNCkgJiYgY3VyID49IDApIHsgY2hhciAqcCA9IGxpbmUgKyA0OyBmb3IgKGludCBpID0gMDsgaSA8IDY0OyBpKyspIFNQW2N1cl0uY2ZnW2ldID0gc3RydG9mKHAsICZwKTsgfQogICAgZWxzZSBpZiAoIXN0cm5jbXAobGluZSwgIlcwICIsIDMpICYmIGN1ciA+PSAwKSB7IGNoYXIgKnAgPSBsaW5lICsgMzsgZm9yIChpbnQgaSA9IDA7IGkgPCAxMzI2OyBpKyspIFNQW2N1cl0ud1tpXSA9IHN0cnRvZihwLCAmcCk7IH0KICAgIGVsc2UgaWYgKCFzdHJuY21wKGxpbmUsICJXMSAiLCAzKSAmJiBjdXIgPj0gMCkgeyBjaGFyICpwID0gbGluZSArIDM7IGZvciAoaW50IGkgPSAwOyBpIDwgMTMyNjsgaSsrKSBTUFtjdXJdLndbMTMyNiArIGldID0gc3RydG9mKHAsICZwKTsgfQogICAgZWxzZSBpZiAoIXN0cm5jbXAobGluZSwgIkYgIiwgMikpIHsKICAgICAgY2hhciBzaWRbMzJdLCBmbFsxNl07IGlmIChzc2NhbmYobGluZSArIDIsICIlMzFzICUxNXMiLCBzaWQsIGZsKSAhPSAyKSBjb250aW51ZTsKICAgICAgaW50IHNpID0gLTE7IGZvciAoaW50IGsgPSAwOyBrIDwgTlNQOyBrKyspIGlmICghc3RyY21wKFNQW2tdLmlkLCBzaWQpKSBzaSA9IGs7IGlmIChzaSA8IDApIGNvbnRpbnVlOwogICAgICBpZiAoTlQgPT0gQ0FQVCkgeyBDQVBUID0gQ0FQVCA/IDIgKiBDQVBUIDogMTAyNDsgVEFTS1MgPSByZWFsbG9jKFRBU0tTLCBzaXplb2YoVGFzaykgKiBDQVBUKTsgfQogICAgICBUQVNLU1tOVF0uc3BvdCA9IHNpOyBzdHJuY3B5KFRBU0tTW05UXS5mbG9wLCBmbCwgNyk7IFRBU0tTW05UXS5mbG9wWzddID0gMDsgTlQrKzsKICAgIH0KICB9CiAgZmNsb3NlKGYpOyByZXR1cm4gMDsKfQpzdGF0aWMgaW50IGRvbmVfaGFzKGNoYXIgKiprZXlzLCBpbnQgbmssIGNvbnN0IGNoYXIgKmspIHsgZm9yIChpbnQgaSA9IDA7IGkgPCBuazsgaSsrKSBpZiAoIXN0cmNtcChrZXlzW2ldLCBrKSkgcmV0dXJuIDE7IHJldHVybiAwOyB9Cgp0eXBlZGVmIHN0cnVjdCB7IGludCBub2RlOyBjaGFyIHBhdGhbOTZdOyBmbG9hdCAqclsyXTsgfSBRSXRlbTsKc3RhdGljIHZvaWQgc29sdmVfb25lKGNvbnN0IFNwb3QgKnNwLCBjb25zdCBjaGFyICpmbG9wLCBGSUxFICpvdXQsIGludCAqaXRlcnNfb3V0LCBkb3VibGUgKmV4cGxfb3V0KSB7CiAgcGZfcmVzZXQoKTsKICBmbG9hdCAqY2ZnID0gcGZfY2ZnX3B0cigpLCAqdyA9IHBmX3dpbl9wdHIoKTsKICBtZW1jcHkoY2ZnLCBzcC0+Y2ZnLCBzaXplb2Ygc3AtPmNmZyk7IG1lbWNweSh3LCBzcC0+dywgc2l6ZW9mIHNwLT53KTsKICBjZmdbMl0gPSAwOyBjZmdbM10gPSAzOyBmb3IgKGludCBpID0gMDsgaSA8IDM7IGkrKykgY2ZnWzQgKyBpXSA9IChmbG9hdCljYXJkX29mKGZsb3AgKyAyICogaSk7CiAgZG91YmxlIHQwID0gbm93X21zKCk7CiAgaWYgKHBmX3NldHVwKCkgPCAwKSB7IGZwcmludGYoc3RkZXJyLCAic2V0dXAgZmFpbGVkIChtZW1vcnk/KSBmb3IgJXMgJXNcbiIsIHNwLT5pZCwgZmxvcCk7IHJldHVybjsgfQogIGludCBpdCA9IDA7IGZsb2F0IGV4ID0gMTAwOwogIHdoaWxlIChpdCA8IDEyMCkgeyBwZl9pdGVyYXRlKCk7IGl0Kys7IGlmIChpdCAlIDEwID09IDApIHsgZXggPSBwZl9leHBsb2l0YWJpbGl0eSgpOyBpZiAoZXggPD0gMS4wZikgYnJlYWs7IH0gfQogIGlmIChpdCAlIDEwKSBleCA9IHBmX2V4cGxvaXRhYmlsaXR5KCk7CiAgZG91YmxlIG1zID0gbm93X21zKCkgLSB0MDsKICAvLyBleHRyYWN0IGV2ZXJ5IGZsb3AgZGVjaXNpb246IGF2ZXJhZ2Ugc3RyYXRlZ3kgYW5kIEVWIG9mIGVhY2ggYWN0aW9uIHBlciBoYW5kCiAgZnByaW50ZihvdXQsICJ7XCJrZXlcIjpcIiVzfG5vcm1hbHwlc1wiLFwic3BvdFwiOlwiJXNcIixcInRyZWVcIjpcIm5vcm1hbFwiLFwiZmxvcFwiOlwiJXNcIixcInBvdFwiOiVnLFwic3RhY2tcIjolZyxcIkhcIjpbJWQsJWRdLFwibm9kZXNcIjpbIiwgc3AtPmlkLCBmbG9wLCBzcC0+aWQsIGZsb3AsIHNwLT5jZmdbMF0sIHNwLT5jZmdbMV0sIE5IWzBdLCBOSFsxXSk7CiAgUUl0ZW0gKnEgPSBtYWxsb2Moc2l6ZW9mKFFJdGVtKSAqIDI1Nik7IGludCBxaCA9IDAsIHF0ID0gMCwgZmlyc3QgPSAxOwogIHFbcXRdLm5vZGUgPSAwOyBxW3F0XS5wYXRoWzBdID0gMDsgZm9yIChpbnQgcCA9IDA7IHAgPCAyOyBwKyspIHsgcVtxdF0ucltwXSA9IG1hbGxvYyhzaXplb2YoZmxvYXQpICogTkhbcF0pOyBtZW1jcHkocVtxdF0ucltwXSwgV1twXSwgc2l6ZW9mKGZsb2F0KSAqIE5IW3BdKTsgfSBxdCsrOwogIGZsb2F0ICpzdCA9IG1hbGxvYyhzaXplb2YoZmxvYXQpICogMTYgKiAxMzI2KTsKICB3aGlsZSAocWggPCBxdCkgewogICAgUUl0ZW0gaXQyID0gcVtxaCsrXTsgY29uc3QgTm9kZSAqbiA9ICZOT0RFU1tpdDIubm9kZV07CiAgICBpZiAobi0+dHlwZSAhPSBOX0FDVElPTikgeyBmcmVlKGl0Mi5yWzBdKTsgZnJlZShpdDIuclsxXSk7IGNvbnRpbnVlOyB9CiAgICBpbnQgcCA9IG4tPnBsYXllciwgSCA9IE5IW3BdLCBuYSA9IG4tPm5hY3Q7CiAgICBtZW1jcHkoc3QsIHBmX3N0cmF0ZWd5KGl0Mi5ub2RlKSwgc2l6ZW9mKGZsb2F0KSAqIG5hICogSCk7CiAgICBmbG9hdCAqcmIgPSBwZl9yZWFjaF9wdHIoKTsgbWVtY3B5KHJiLCBpdDIuclsxIC0gcF0sIHNpemVvZihmbG9hdCkgKiBOSFsxIC0gcF0pOwogICAgZmxvYXQgKnYgPSBwZl92YWx1ZXMoaXQyLm5vZGUsIHApOwogICAgdW5zaWduZWQgY2hhciAqczggPSBtYWxsb2MobmEgKiBIKTsgaW50MTZfdCAqZTE2ID0gbWFsbG9jKHNpemVvZihpbnQxNl90KSAqIG5hICogSCk7CiAgICBmb3IgKGludCBpID0gMDsgaSA8IG5hICogSDsgaSsrKSB7IHM4W2ldID0gKHVuc2lnbmVkIGNoYXIpKHN0W2ldICogMjU1ICsgLjVmKTsgZmxvYXQgZSA9IHYgPyB2W2ldICogNTAgOiAwOyBlMTZbaV0gPSAoaW50MTZfdCkoZSA+IDMyNzY3ID8gMzI3NjcgOiBlIDwgLTMyNzY3ID8gLTMyNzY3IDogKGUgPj0gMCA/IGUgKyAuNWYgOiBlIC0gLjVmKSk7IH0KICAgIGZwcmludGYob3V0LCAiJXN7XCJwYXRoXCI6XCIlc1wiLFwicFwiOiVkLFwiYWN0c1wiOlsiLCBmaXJzdCA/ICIiIDogIiwiLCBpdDIucGF0aCwgcCk7IGZpcnN0ID0gMDsKICAgIGZvciAoaW50IGsgPSAwOyBrIDwgbmE7IGsrKykgeyBjb25zdCBOb2RlICpjID0gJk5PREVTW24tPmNoaWxkICsga107IGZwcmludGYob3V0LCAiJXNbJWQsJWddIiwgayA/ICIsIiA6ICIiLCBjLT5hY3R0eXBlLCAoZG91YmxlKSgoaW50KShjLT5hY3RhbXQgKiAxMDAgKyAuNWYpKSAvIDEwMCk7IH0KICAgIGZwcmludGYob3V0LCAiXSxcImNcIjpbJWcsJWddLFwic1wiOlwiIiwgKGRvdWJsZSkoKGludCkobi0+YzAgKiAxMDAgKyAuNWYpKSAvIDEwMCwgKGRvdWJsZSkoKGludCkobi0+YzEgKiAxMDAgKyAuNWYpKSAvIDEwMCk7CiAgICBiNjQob3V0LCBzOCwgbmEgKiBIKTsgZnB1dHMoIlwiLFwiZVwiOlwiIiwgb3V0KTsgYjY0KG91dCwgKHVuc2lnbmVkIGNoYXIgKillMTYsIHNpemVvZihpbnQxNl90KSAqIG5hICogSCk7IGZwdXRzKCJcIn0iLCBvdXQpOwogICAgZnJlZShzOCk7IGZyZWUoZTE2KTsKICAgIGZvciAoaW50IGsgPSAwOyBrIDwgbmE7IGsrKykgewogICAgICBpZiAocXQgPj0gMjU2KSBicmVhazsKICAgICAgUUl0ZW0gYzsgYy5ub2RlID0gbi0+Y2hpbGQgKyBrOyBzbnByaW50ZihjLnBhdGgsIHNpemVvZiBjLnBhdGgsIGl0Mi5wYXRoWzBdID8gIiVzLiVkIiA6ICIlcyVkIiwgaXQyLnBhdGgsIGspOwogICAgICBmb3IgKGludCBwcCA9IDA7IHBwIDwgMjsgcHArKykgeyBjLnJbcHBdID0gbWFsbG9jKHNpemVvZihmbG9hdCkgKiBOSFtwcF0pOyBtZW1jcHkoYy5yW3BwXSwgaXQyLnJbcHBdLCBzaXplb2YoZmxvYXQpICogTkhbcHBdKTsgfQogICAgICBmb3IgKGludCBoID0gMDsgaCA8IEg7IGgrKykgYy5yW3BdW2hdICo9IHN0W2sgKiBIICsgaF07CiAgICAgIHFbcXQrK10gPSBjOwogICAgfQogICAgZnJlZShpdDIuclswXSk7IGZyZWUoaXQyLnJbMV0pOwogIH0KICBmcmVlKHN0KTsgZnJlZShxKTsKICBmcHJpbnRmKG91dCwgIl0sXCJpdGVyc1wiOiVkLFwiZXhwbFwiOiUuM2YsXCJtc1wiOiUuMGYsXCJzcmNcIjpcInBpXCIsXCJhdFwiOiUuMGZ9XG4iLCBpdCwgZXgsIG1zLCAoZG91YmxlKXRpbWUoMCkgKiAxMDAwKTsKICBmZmx1c2gob3V0KTsKICAqaXRlcnNfb3V0ID0gaXQ7ICpleHBsX291dCA9IGV4Owp9CmludCBtYWluKGludCBhcmdjLCBjaGFyICoqYXJndikgewogIGlmIChhcmdjIDwgNSkgeyBmcHJpbnRmKHN0ZGVyciwgInVzYWdlOiAlcyBwaS1hdWZ0cmFnLnR4dCA8cGFydD4gPHBhcnRzPiBlcmdlYm5pcy5qc29ubFxuIiwgYXJndlswXSk7IHJldHVybiAxOyB9CiAgY29uc3QgY2hhciAqZW52ID0gZ2V0ZW52KCJQRl9IRUFQX01CIik7IEhFQVBfQ0FQID0gKHNpemVfdCkoZW52ID8gYXRvaShlbnYpIDogMTYwMCkgPDwgMjA7CiAgaW50IHBhcnQgPSBhdG9pKGFyZ3ZbMl0pLCBwYXJ0cyA9IGF0b2koYXJndlszXSk7CiAgaWYgKHJlYWRfam9iKGFyZ3ZbMV0pIHx8ICFOVCkgeyBmcHJpbnRmKHN0ZGVyciwgIm5vIHRhc2tzXG4iKTsgcmV0dXJuIDE7IH0KICAvLyBhbHJlYWR5IGRvbmUgKHJlc3VtZSkKICBjaGFyICoqa2V5cyA9IDA7IGludCBuayA9IDAsIGNrID0gMDsgRklMRSAqaW4gPSBmb3Blbihhcmd2WzRdLCAiciIpOwogIGlmIChpbikgeyBjaGFyICpsbiA9IDA7IHNpemVfdCBjYXAgPSAwOyBzc2l6ZV90IGxlbjsKICAgIHdoaWxlICgobGVuID0gZ2V0bGluZSgmbG4sICZjYXAsIGluKSkgPiAwKSB7IGNoYXIgKmsgPSBzdHJzdHIobG4sICJcImtleVwiOlwiIik7IGlmICghaykgY29udGludWU7IGsgKz0gNzsgY2hhciAqZSA9IHN0cmNocihrLCAnIicpOyBpZiAoIWUgfHwgbG5bbGVuIC0gMV0gIT0gJ1xuJykgY29udGludWU7ICplID0gMDsKICAgICAgaWYgKG5rID09IGNrKSB7IGNrID0gY2sgPyAyICogY2sgOiAyNTY7IGtleXMgPSByZWFsbG9jKGtleXMsIHNpemVvZihjaGFyICopICogY2spOyB9IGtleXNbbmsrK10gPSBzdHJkdXAoayk7IH0KICAgIGZyZWUobG4pOyBmY2xvc2UoaW4pOyB9CiAgRklMRSAqb3V0ID0gZm9wZW4oYXJndls0XSwgImEiKTsgaWYgKCFvdXQpIHsgcGVycm9yKGFyZ3ZbNF0pOyByZXR1cm4gMTsgfQogIGludCBtaW5lID0gMDsgZm9yIChpbnQgaSA9IDA7IGkgPCBOVDsgaSsrKSBpZiAoaSAlIHBhcnRzID09IHBhcnQpIG1pbmUrKzsKICBmcHJpbnRmKHN0ZGVyciwgIlRlaWwgJWQvJWQ6ICVkIEZsb3BzLCAlZCBzY2hvbiBmZXJ0aWdcbiIsIHBhcnQgKyAxLCBwYXJ0cywgbWluZSwgbmspOwogIGludCBkb25lID0gMDsgZG91YmxlIHQwID0gbm93X21zKCk7CiAgZm9yIChpbnQgaSA9IDA7IGkgPCBOVDsgaSsrKSB7CiAgICBpZiAoaSAlIHBhcnRzICE9IHBhcnQpIGNvbnRpbnVlOwogICAgY2hhciBrZXlbNjRdOyBzbnByaW50ZihrZXksIHNpemVvZiBrZXksICIlc3xub3JtYWx8JXMiLCBTUFtUQVNLU1tpXS5zcG90XS5pZCwgVEFTS1NbaV0uZmxvcCk7CiAgICBpZiAoZG9uZV9oYXMoa2V5cywgbmssIGtleSkpIHsgZG9uZSsrOyBjb250aW51ZTsgfQogICAgaW50IGl0OyBkb3VibGUgZXg7IGRvdWJsZSB0cyA9IG5vd19tcygpOwogICAgc29sdmVfb25lKCZTUFtUQVNLU1tpXS5zcG90XSwgVEFTS1NbaV0uZmxvcCwgb3V0LCAmaXQsICZleCk7CiAgICBkb25lKys7CiAgICBkb3VibGUgZWwgPSBub3dfbXMoKSAtIHQwLCBwZXIgPSAobm93X21zKCkgLSB0cykgLyAxMDAwOwogICAgZnByaW50ZihzdGRlcnIsICJbJWQvJWRdICVzICVzOiAlZCBJdGVyYXRpb25lbiwgJS4yZiAlJSB2b20gUG90LCAlLjBmIHMgKGzDpHVmdCBzZWl0ICUuMWYgaClcbiIsIGRvbmUsIG1pbmUsIFNQW1RBU0tTW2ldLnNwb3RdLmlkLCBUQVNLU1tpXS5mbG9wLCBpdCwgZXgsIHBlciwgZWwgLyAzNjAwMDAwKTsKICB9CiAgZmNsb3NlKG91dCk7CiAgZnByaW50ZihzdGRlcnIsICJmZXJ0aWdcbiIpOwogIHJldHVybiAwOwp9Cg==", PI_SH = "IyEvYmluL3NoCiMgRmxvcC1CaWJsaW90aGVrIGF1ZiBkZW0gUmFzcGJlcnJ5IFBpIHJlY2huZW4KIyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KIyAxLiBJbiBkZXIgQXBwIChTb2x2ZXIgPiBGbG9wLUJpYmxpb3RoZWspIOKAnlBpLUF1ZnRyYWcgZXJzdGVsbGVu4oCcIHVuZCDigJ5QaS1Qcm9ncmFtbSBsYWRlbuKAnCB0aXBwZW4uCiMgICAgRGllIHZpZXIgRGF0ZWllbiAocGktYXVmdHJhZy50eHQsIHBmc29sdmUuYywgcGZsaWIuYywgcGktcmVjaG5lbi5zaCkgaW4gZWluZW4gT3JkbmVyIGF1ZiBkZW0gUGkga29waWVyZW4sIHouIEIuIH4vZmxvcHMKIyAyLiBBdWYgZGVtIFBpIGltIFRlcm1pbmFsOiAgIGNkIH4vZmxvcHMgJiYgc2ggcGktcmVjaG5lbi5zaCA0CiMgICAgRGllIFphaGwgaXN0IGRpZSBBbnphaGwgcGFyYWxsZWxlciBSZWNobnVuZ2VuOiA0IGJlaSA4IEdCIG9kZXIgMTYgR0IgUkFNLCAyIGJlaSA0IEdCLgojIDMuIEVzIGzDpHVmdCBpbSBIaW50ZXJncnVuZCB3ZWl0ZXIsIGF1Y2ggd2VubiBkdSBkYXMgVGVybWluYWwgc2NobGllw590LiBGb3J0c2Nocml0dDogICB0YWlsIC1mIGxvZy0wLnR4dAojIDQuIMOcYmVydHJhZ2VuIGF1ZnMgaVBob25lOiBhdWYgZGVtIFBpICAgcHl0aG9uMyAtbSBodHRwLnNlcnZlciA4MDAwICAgc3RhcnRlbiwgZGllIElQIHN0ZWh0IGJlaSAgIGhvc3RuYW1lIC1JCiMgICAgSW0gaVBob25lLUJyb3dzZXIgaHR0cDovLzxJUD46ODAwMCDDtmZmbmVuLCBkaWUgRGF0ZWllbiBlcmdlYm5pcy0qLmpzb25sIGxhZGVuIHVuZCBpbiBkZXIgQXBwIHVudGVyIOKAnkltcG9ydGllcmVu4oCcIGF1c3fDpGhsZW4uCiMgTm9jaG1hbCBzdGFydGVuIG1hY2h0IGRvcnQgd2VpdGVyLCB3byBlcyBhdWZnZWjDtnJ0IGhhdC4gU3RvcHBlbjogICBwa2lsbCBwZmxpYgpOPSR7MTotNH0KZ2NjIC1PMyAtbWFyY2g9bmF0aXZlIC1vIHBmbGliIHBmbGliLmMgLWxtIHx8IHsgZWNobyAiS29tcGlsaWVyZW4gZmVobGdlc2NobGFnZW4gKHN1ZG8gYXB0IGluc3RhbGwgYnVpbGQtZXNzZW50aWFsKSI7IGV4aXQgMTsgfQppPTAKd2hpbGUgWyAkaSAtbHQgJE4gXTsgZG8KICBub2h1cCAuL3BmbGliIHBpLWF1ZnRyYWcudHh0ICRpICROIGVyZ2VibmlzLSRpLmpzb25sID4gbG9nLSRpLnR4dCAyPiYxICYKICBpPSQoKGkrMSkpCmRvbmUKZWNobyAiJE4gUmVjaG51bmdlbiBnZXN0YXJ0ZXQuIEZvcnRzY2hyaXR0OiB0YWlsIC1mIGxvZy0wLnR4dCIK";
+async function libPiJob() {
+  if (!lib.loaded) await libLoadIndex();
+  const { text, n } = libPiJobText();
+  libDownload("pi-auftrag.txt", text);
+  $("libMsg").hidden = false; $("libMsg").textContent = n ? `Auftrag mit ${fmt(n)} Flops erstellt (alles, was noch fehlt, in der Reihenfolge der Stufen). Kopier die Datei zusammen mit dem Pi-Programm auf den Pi.` : "Die Bibliothek ist vollständig, es gibt nichts mehr zu rechnen.";
+}
+function libPiJobText(limit, onlySpot) {
+  const lines = ["PFJOB 1"]; let n = 0;
+  for (const st of LIB_STAGES) for (const spot of st.spots) { if (onlySpot && spot !== onlySpot) continue;
+    let flops = LF.order().slice(0, st.n).filter(f => !libHas(spot, f.key) && !lines.includes(`F ${spot} ${f.key}`));
+    if (limit) flops = flops.slice(0, Math.max(0, limit - n));
+    if (!flops.length) continue;
+    if (!lines.includes(`SPOT ${spot}`)) {
+      const cfg = libCfg(spot, [0, 1, 2]), c = new Float32Array(64);
+      c[0] = cfg.pot; c[1] = cfg.stack; c[9] = cfg.rake; c[10] = cfg.rakeCap; c[11] = cfg.allinThr; c[12] = cfg.addAllin;
+      cfg.streets.forEach((s, k) => { const o = 13 + 16 * k; c[o] = s.maxbets; c[o + 1] = s.oop.length; s.oop.slice(0, 4).forEach((v, i) => { c[o + 2 + i] = v; }); c[o + 6] = s.ip.length; s.ip.slice(0, 4).forEach((v, i) => { c[o + 7 + i] = v; }); c[o + 11] = s.raise.length; s.raise.slice(0, 4).forEach((v, i) => { c[o + 12 + i] = v; }); });
+      lines.push(`SPOT ${spot}`, `CFG ${[...c].map(v => +v.toFixed(5)).join(" ")}`, `W0 ${[...cfg.w0].map(v => +v.toFixed(4)).join(" ")}`, `W1 ${[...cfg.w1].map(v => +v.toFixed(4)).join(" ")}`);
+    }
+    for (const f of flops) { lines.push(`F ${spot} ${f.key}`); n++; }
+  }
+  lines.push("END");
+  return { text: lines.join("\n") + "\n", n };
+}
+function libPiProgram() {
+  libDownload("pfsolve.c", b64d(PI_SRC)); setTimeout(() => libDownload("pflib.c", b64d(PI_C)), 400); setTimeout(() => libDownload("pi-rechnen.sh", b64d(PI_SH)), 800);
+  $("libMsg").hidden = false; $("libMsg").textContent = "Drei Dateien geladen: pfsolve.c, pflib.c und pi-rechnen.sh. Anleitung steht oben in pi-rechnen.sh.";
+}
+
+// ---- library UI wiring ----
+$("libExportBtn").addEventListener("click", () => libExport());
+$("libImportBtn").addEventListener("click", () => $("libImportIn").click());
+$("libImportIn").addEventListener("change", e => { const f = [...e.target.files]; e.target.value = ""; if (f.length) libImport(f); });
+$("libPiJobBtn").addEventListener("click", () => libPiJob());
+$("libPiProgBtn").addEventListener("click", () => libPiProgram());
+libLoadIndex().then(libRender).catch(() => libRender());
 
 setExample();
 renderReview();

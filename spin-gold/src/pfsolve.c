@@ -16,7 +16,7 @@ void *memcpy(void *d, const void *s, size_t n) { unsigned char *p = d; const uns
 // ---------------- memory ----------------
 #ifdef NATIVE
 static unsigned char *HEAP = 0; static size_t HEAP_CAP = 0, HEAP_TOP = 0;
-static void heap_init(void) { if (!HEAP) { HEAP_CAP = (size_t)5 << 30; HEAP = malloc(HEAP_CAP); } }
+static void heap_init(void) { if (!HEAP) { if (!HEAP_CAP) HEAP_CAP = (size_t)5 << 30; HEAP = malloc(HEAP_CAP); } }
 static void *xalloc(size_t n) { heap_init(); n = (n + 15) & ~(size_t)15; if (HEAP_TOP + n > HEAP_CAP) return 0; void *p = HEAP + HEAP_TOP; HEAP_TOP += n; return p; }
 static void heap_reset(void) { HEAP_TOP = 0; }
 static size_t heap_used(void) { return HEAP_TOP; }
