@@ -308,13 +308,46 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
 .nots { display: grid; gap: 4px 10px; grid-template-columns: max-content minmax(0, 1fr); font-size: 13.5px; margin-top: 8px; }
 .nots .mono { word-break: break-word; }
 @media (max-width: 520px) { .nots { grid-template-columns: minmax(0, 1fr); } .cminis { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- Solver ---- */
+.solver { display: grid; gap: 16px; }
+.pf-top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 880px) { .pf-top { grid-template-columns: minmax(0, 1fr); } }
+.pf-card { justify-items: stretch; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.pf-card > *, .pf-top > * { min-width: 0; max-width: 100%; }
+.pf-card .frow { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.pf-card .field { flex: 1 1 110px; min-width: 0; }
+.pf-card .field.wide { flex: 2 1 200px; }
+.pf-card .field input, .pf-card .field select { width: 100%; }
+.pf-sizes summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.pf-sizes input { width: 100%; min-width: 56px; }
+.pf-result { display: grid; gap: 12px; }
+.pf-path { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-path .ca { border: 0; cursor: pointer; font: inherit; font-size: 13px; }
+.pf-q { margin: 0; font-size: 15px; }
+.pf-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pf-act { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+.pf-act i, .pf-hand i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.pf-act b { font-variant-numeric: tabular-nums; }
+.pf-body { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 880px) { .pf-body { grid-template-columns: minmax(0, 1fr); } }
+.pf-side { display: grid; gap: 10px; }
+.pf-side .field input { width: 100%; }
+.pf-hand { display: grid; gap: 4px; font-size: 14px; }
+.pf-hand div { display: flex; align-items: center; gap: 8px; }
+.pf-hand b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.pf-cards { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 3px; margin-top: 8px; }
+.pf-cards .pcard { width: 100%; height: 34px; cursor: pointer; font-size: 12px; }
+.pf-cards .pcard:disabled { opacity: .2; cursor: default; }
+.pf-end { margin: 0; font-size: 15px; }
+.pfgrid .mcell { text-shadow: 0 0 2px rgba(0,0,0,.6); }
 </style>
 
 <div class="wrap">
   <header>
     <div class="eyebrow">GGPoker · Spin &amp; Gold 3-max · Rush &amp; Cash 6-max</div>
     <h1>Session <span class="amp">Review</span></h1>
-    <p class="lede">Spiel dein Session-Video ab, und die Seite zeigt bei jeder deiner Entscheidungen sofort die GTO-Linie und die Exploit-Linie gegen deinen Gegnertyp. Spin &amp; Gold bewertet sie mit Push/Fold-Gleichgewichten von 2 bis 25 BB (ChipEV und ICM), Rush &amp; Cash preflop mit 6-max-Referenz-Ranges für 100 BB; dazu schreibt die Seite die Line bis zum River mit. Einzelne Screenshots und GG-Handhistorien gehen auch.</p>
+    <p class="lede">Spiel dein Session-Video ab, und die Seite zeigt bei jeder deiner Entscheidungen sofort die GTO-Linie und die Exploit-Linie gegen deinen Gegnertyp. Spin &amp; Gold bewertet sie mit Push/Fold-Gleichgewichten von 2 bis 25 BB (ChipEV und ICM), Rush &amp; Cash preflop mit 6-max-Referenz-Ranges für 100 BB; dazu schreibt die Seite die Line bis zum River mit. Einzelne Screenshots und GG-Handhistorien gehen auch. Der eingebaute Postflop-Solver rechnet direkt auf deinem Gerät.</p>
   </header>
 
   <nav class="views" id="views" aria-label="Ansicht">
@@ -322,6 +355,7 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
     <button class="btn" type="button" data-view="review" aria-pressed="false">Hand-Review</button>
     <button class="btn" type="button" data-view="session" aria-pressed="false">Session-Review</button>
     <button class="btn" type="button" data-view="charts" aria-pressed="false">Range-Charts</button>
+    <button class="btn" type="button" data-view="solver" aria-pressed="false">Solver</button>
   </nav>
 
   <section class="review" id="reviewView" hidden aria-label="Hand-Review">
@@ -456,6 +490,54 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
       <div class="tablewrap"><table class="stable"><thead><tr><th>Bereich</th><th class="num">Spots</th><th class="num">Fehler</th><th class="num">zu weit</th><th class="num">zu eng</th><th>Tendenz</th></tr></thead><tbody id="cLeaks"></tbody></table></div>
       <div class="tablewrap"><table class="stable"><thead><tr><th>Zeit</th><th>Pos</th><th>Karten</th><th>Spot</th><th>Du</th><th>GTO</th><th>Exploit</th><th>Urteil</th><th class="num">BB</th></tr></thead><tbody id="cBody"></tbody></table></div>
       <p class="fine">Klick auf eine Zeile zeigt die Bewertung, die ganze Line bis zum River und die Ranges. „Zu weit“ heißt: du spielst Hände, die laut Referenz folden; „zu eng“: du foldest oder callst Hände, mit denen die Referenz weiterspielt bzw. raist. Postflop wird noch nicht bewertet.</p>
+    </div>
+  </section>
+
+  <section class="solver" id="solverView" hidden aria-label="Solver">
+    <div class="pf-top">
+      <div class="drop pf-card">
+        <b>Spot lösen</b>
+        <span class="sub">Der Postflop-Solver rechnet direkt auf diesem Gerät, nichts wird hochgeladen. River und Turn dauern Sekunden, ein Flop einige Minuten. Die Ranges kommen aus den Rush &amp; Cash-Referenzen; aus dem Video- und Session-Review kannst du einen Spot direkt hierher schicken.</span>
+        <div class="frow">
+          <label class="field wide" for="pfSpot">Spot<select id="pfSpot"></select></label>
+          <label class="field" for="pfBoard">Board<input id="pfBoard" type="text" maxlength="20" placeholder="z. B. Kd7c2s9h"></label>
+          <button class="btn" type="button" id="pfRand">Zufalls-Flop</button>
+        </div>
+        <div class="frow">
+          <label class="field" for="pfPot">Pot (BB)<input id="pfPot" type="number" inputmode="decimal" min="0" step="any"></label>
+          <label class="field" for="pfStack">Stack (BB)<input id="pfStack" type="number" inputmode="decimal" min="0" step="any"></label>
+          <label class="field" for="pfAcc">Genauigkeit<select id="pfAcc"><option value="2">grob (2 % vom Pot)</option><option value="1" selected>normal (1 %)</option><option value="0.5">genau (0,5 %)</option><option value="0.3">sehr genau (0,3 %)</option></select></label>
+        </div>
+        <details class="pf-sizes" id="pfSizes"><summary>Einsatzgrößen</summary>
+          <div class="tablewrap"><table class="stable"><thead><tr><th>Straße</th><th>OOP Bets (% Pot)</th><th>IP Bets (% Pot)</th><th>Raise (× Bet)</th><th>Max. Bets</th></tr></thead><tbody>
+            <tr id="pfRowF"><td>Flop</td><td><input id="pfOF" type="text"></td><td><input id="pfIF" type="text"></td><td><input id="pfXF" type="text"></td><td><input id="pfMF" type="number" min="0" max="4"></td></tr>
+            <tr id="pfRowT"><td>Turn</td><td><input id="pfOT" type="text"></td><td><input id="pfIT" type="text"></td><td><input id="pfXT" type="text"></td><td><input id="pfMT" type="number" min="0" max="4"></td></tr>
+            <tr id="pfRowR"><td>River</td><td><input id="pfOR" type="text"></td><td><input id="pfIR" type="text"></td><td><input id="pfXR" type="text"></td><td><input id="pfMR" type="number" min="0" max="4"></td></tr>
+          </tbody></table></div>
+          <p class="cnote">Mehrere Größen mit Komma trennen. „Max. Bets“ zählt Bet und Raises pro Straße (2 = Bet und ein Raise). All-in kommt automatisch dazu, wenn der Stack im Verhältnis zum Pot klein ist. Jede zusätzliche Größe macht den Baum deutlich größer. Rake: 5 %, maximal 3 BB.</p>
+        </details>
+        <div class="row-btns"><button class="btn primary" type="button" id="pfSolve">Lösen</button><button class="btn" type="button" id="pfStop" hidden>Stopp</button></div>
+      </div>
+      <div class="drop pf-card">
+        <b>Geschwindigkeit messen</b>
+        <span class="sub">Löst einen River und einen Turn komplett und rechnet hoch, wie lange ein Flop und eine Bibliothek mit 300 Flops auf diesem Gerät dauern würden.</span>
+        <div class="row-btns"><button class="btn primary" type="button" id="pfBench">Test starten</button><button class="btn" type="button" id="pfBenchFlop" hidden>Flop echt testen</button></div>
+        <div id="pfBenchOut"></div>
+      </div>
+    </div>
+    <div class="status" id="pfStatus" hidden><i class="spinner" id="pfSpin"></i><span id="pfStatusText"></span></div>
+    <div class="pf-result" id="pfResult" hidden>
+      <div class="pf-path" id="pfPath"></div>
+      <div id="pfNodeBox"></div>
+      <div class="pf-body">
+        <div class="cgrid pfgrid" id="pfGrid" aria-label="Strategie pro Hand"></div>
+        <div class="pf-side">
+          <label class="field" for="pfHand">Hand nachschlagen<input id="pfHand" type="text" maxlength="12" placeholder="z. B. AhKd"></label>
+          <div id="pfHandOut"></div>
+          <div id="pfLegend"></div>
+          <p class="fine">Farben zeigen den Mix der Aktionen pro Hand. Blasse Felder erreichen diesen Punkt selten. Die Lösung ist ein Gleichgewicht für die gewählten Einsatzgrößen und Ranges; andere Größen geben andere Strategien.</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -1855,12 +1937,12 @@ document.addEventListener("paste", e => {
 
 // ---- views ----
 function setView(v) {
-  $("reviewView").hidden = v !== "review"; $("chartsView").hidden = v !== "charts"; $("sessionView").hidden = v !== "session"; $("videoView").hidden = v !== "video";
+  $("reviewView").hidden = v !== "review"; $("chartsView").hidden = v !== "charts"; $("sessionView").hidden = v !== "session"; $("videoView").hidden = v !== "video"; $("solverView").hidden = v !== "solver";
   if (v !== "video") { try { vid.pause(); } catch (e) {} }
   document.querySelectorAll("#views [data-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === v ? "true" : "false"));
 }
 document.querySelectorAll("#views [data-view]").forEach(b => b.addEventListener("click", () => { setView(b.dataset.view); try { history.replaceState(null, "", "#" + b.dataset.view); } catch (e) {} }));
-const viewFromHash = () => ({ "#charts": "charts", "#session": "session", "#review": "review" })[location.hash] || "video";
+const viewFromHash = () => ({ "#charts": "charts", "#session": "session", "#review": "review", "#solver": "solver" })[location.hash] || "video";
 window.addEventListener("hashchange", () => setView(viewFromHash()));
 setView(viewFromHash());
 
@@ -2930,8 +3012,10 @@ function renderCashSession() {
       tb.appendChild(tr);
       if (sessC.open === key) {
         const dt = document.createElement("tr"); dt.className = "cdetail"; const td = document.createElement("td"); td.colSpan = 9;
-        td.innerHTML = `<div class="cdet">${cashResultHtml(r)}${hd.streets ? cashLineHtml(hd.streets, hd.heroPos) : ""}<div class="minis cminis"></div></div>`;
+        const post = hd.streets ? hd.streets.map((st, i) => i && st.board && st.board.length >= 3 ? i : 0).filter(Boolean) : [];
+        td.innerHTML = `<div class="cdet">${cashResultHtml(r)}${hd.streets ? cashLineHtml(hd.streets, hd.heroPos) : ""}${post.length ? `<div class="row-btns">${post.map(i => `<button type="button" class="btn" data-pfst="${i}">${hd.streets[i].name} im Solver lösen</button>`).join("")}</div><p class="cnote" data-pfnote hidden></p>` : ""}<div class="minis cminis"></div></div>`;
         cashMinis(td.querySelector(".cminis"), r);
+        td.querySelectorAll("[data-pfst]").forEach(b => b.onclick = ev => { ev.stopPropagation(); const err = pfFromStreets(hd.streets, hd.stacks, +b.dataset.pfst); if (err) { const nn = td.querySelector("[data-pfnote]"); nn.hidden = false; nn.textContent = err; } });
         dt.appendChild(td); tb.appendChild(dt);
       }
       continue;
@@ -3122,10 +3206,13 @@ function renderCashPanel(sp) {
   let h = `<div class="vp-head"><span class="vp-time">${tFmt(sp.t)}</span><span class="vp-spot">${title}</span></div>`;
   h += `<div class="vp-meta"><span class="cardsview">${cp ? cardsHtml(cp.cs) : ""}</span><span>${H.heroPos}</span><span>Effektiv ${CBB(d.eff)} BB</span>${d.ff ? `<span>Fast-Fold</span>` : ""}</div>`;
   if (d.street === 0) h += cashResultHtml(d.res, { actButtons: !d.ff, auto: true });
-  else { const p = d.post; h += `<div class="vp-line"><h3>${STREETS[d.street]} · Pot ${CBB(p.pot)} BB</h3><div class="ev">${p.toCall > .01 ? `Zu callen: ${CBB(p.toCall)} BB (${Math.round(p.toCall / p.pot * 100)} % vom Pot)` : "Du kannst checken oder setzen."}${d.act ? ` · Gespielt: ${ACT_DE[d.act.t] || d.act.t}${d.act.to ? " " + CBB(d.act.to) + " BB" : ""}` : ""}</div><p class="cnote">Postflop wird noch nicht bewertet; das kommt mit dem Solver im nächsten Schritt. Die Line wird schon mitgeschrieben.</p></div>`; }
+  else { const p = d.post; h += `<div class="vp-line"><h3>${STREETS[d.street]} · Pot ${CBB(p.pot)} BB</h3><div class="row-btns"><button type="button" class="btn primary" id="vpSolve">Spot im Solver lösen</button></div><p class="cnote" id="vpSolveNote" hidden></p><div class="ev">${p.toCall > .01 ? `Zu callen: ${CBB(p.toCall)} BB (${Math.round(p.toCall / p.pot * 100)} % vom Pot)` : "Du kannst checken oder setzen."}${d.act ? ` · Gespielt: ${ACT_DE[d.act.t] || d.act.t}${d.act.to ? " " + CBB(d.act.to) + " BB" : ""}` : ""}</div><p class="cnote">Postflop wird noch nicht bewertet; das kommt mit dem Solver im nächsten Schritt. Die Line wird schon mitgeschrieben.</p></div>`; }
   h += cashLineHtml(ctStreets(H), H.heroPos);
   el.innerHTML = h;
   el.querySelectorAll("[data-cact]").forEach(b => b.onclick = () => { const a = b.dataset.cact; d.act = { t: a }; d.res = CASH.evaluate(d.ctx, d.h, d.act, ct.vtype, d.eff); if (H.dec === d) H.dec = null; renderCashPanel(sp); renderTimeline(); });
+  if ($("vpSolve")) $("vpSolve").onclick = () => { try { vid.pause(); } catch (e) {} const starts = {}; for (const sl of H.slots) starts[sl.pos] = sl.start;
+    const err = pfFromStreets(H.streets.map((st, i) => ({ acts: st.acts, board: st.board, pot: i ? st.pot : null })), starts, d.street);
+    if (err) { $("vpSolveNote").hidden = false; $("vpSolveNote").textContent = err; } };
 }
 function cashTimelineRow(sp, tr) {
   const d = sp.d, H = sp.H, cp = parseCards(H.cards), r = d.res;
@@ -3178,6 +3265,351 @@ $("ccHand").addEventListener("input", e => { cc.hand = e.target.value.trim(); re
 $("ccCmp").addEventListener("change", e => { cc.cmp = e.target.checked; renderCashCharts(); });
 
 vid.addEventListener("seeked", () => { ct.hand = null; ct.cand = null; });
+
+// ---- hand → solver ----
+function pfStackAt(startStacks, streets, upto, posA, posB) { // remaining effective stack at the start of street `upto`
+  const put = pos => { let c = 0; for (let k = 0; k < upto; k++) { let m = 0; for (const a of streets[k].acts) if (a.pos === pos && a.to != null) m = Math.max(m, a.to); c += m; } return c; };
+  return Math.min(startStacks[posA] - put(posA), startStacks[posB] - put(posB));
+}
+function pfFromStreets(streets, startStacks, k) {
+  const pre = streets[0].acts.filter(a => a.t !== "post");
+  const folded = new Set(pre.filter(a => a.t === "fold").map(a => a.pos)); const live = [...new Set(pre.map(a => a.pos))].filter(x => !folded.has(x));
+  if (live.length !== 2) return "Nur Hände, die heads-up zum Flop gehen, lassen sich lösen.";
+  const st = streets[k]; const stack = pfStackAt(startStacks, streets, k, live[0], live[1]);
+  return pfOpenFromHand({ pre, board: (st.board || []).filter(Boolean), pot: st.pot, stack, street: k });
+}
+
+// ================= Postflop solver (WebAssembly, runs on this device) =================
+const PF_WASM_B64 = "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AgD9CwMAIAIgAf0AAgD9CwPAASAEQQRqKgIAIQYgBCgCACESAkBBAC0AkN2AgAAiAEUNAEEAKAKwiICAACARaiIiQRhqQf//AzsBACAiQQxqIAY4AgAgIkEDaiASOgAACwJAAkACQAJAAkAgEg4DAAECAwsgAEUNA0EAKAKwiICAACARaiISQQI6AAAgEkEEakIANwIAIBJBAmpBADoAACASQQFqIAM6AAAgEkEQaiACKgLYASACKgLQAZI4AgAgEkEUaiACKgLcASACKgLUAZI4AgAgEkEaaiACKALAATsBAAwDCwJAIAMNACACQTBqQRBqIB8pAwA3AwAgAkEwakEYaiACQcABakEYav0AAwD9CwMAIAJBMGpBKGogEygCADYCACACQQE2AswBIAJBATYCxAEgAiAC/QADwAH9CwMwIAUgAkEwahCFgICAAAwDCyACQeAAakEoaiAkKAIANgIAIAJB4ABqQSBqICUpAgA3AwAgAkHgAGpBEGogJv0AAgD9CwMAIAIgAf0AAgD9CwNgIAUgAkHgAGoQi4CAgAAMAgsgIyAGOAIAIAJBkAFqQShqIBMoAgA2AgAgAkGQAWpBIGogCCkDADcDACACQZABakEQaiAf/QADAP0LAwAgAiAC/QADwAH9CwOQASAFIAJBkAFqEIuAgIAADAELICMgBjgCACACQcABakEIaiISIBIoAgBBAWo2AgAgAkEQaiAfKQMANwMAIAJBGGogAkHAAWpBGGr9AAMA/QsDACACQShqIBMoAgA2AgAgAkEIaiASKQMANwMAIAIgDjYCxAEgAiACKQPAATcDACAFIAIQhYCAgAALIAVBAWohBSARQRxqIREgBEEIaiEEIBlBf2oiGQ0ACwsgAkHwAmokgICAgAALCwBBACgCpIiAgAALDABBACgCqIiAgAC4C0MAQQBBsImBgQBBD2pBcHE2AvTdgIAAQQBBADYCkIiAgABBAEEANgKUiICAAEEAQQA2ArCIgIAAQQBBADYCtIiAgAAL6T8DC38Few5/I4CAgIAAQcABayIAJICAgIAAQQBBADYCvIiAgABBAEEANgK4iICAAEGwiYGBAEEPakFwcSEBEISAgIAAQQAoApSIgIAAIQJBACgCgN6AgAAhA0EBIQRBACEFAkADQCACIAVBrgpsQQJ0IgZqIQcCQAJAIANBAEoNAEEA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Zl9yZXNldAkIcGZfc2V0dXAKBWV2YWw3CwplbmRfc3RyZWV0DApwZl9pdGVyYXRlDQR3YWxrDg1wZl9pdGVyYXRpb25zDxFwZl9leHBsb2l0YWJpbGl0eRAIdmFsdWVfb2YRBXBmX2V2EgxwZl9udW1faGFuZHMTDXBmX2hhbmRfY2FyZHMUD3BmX2hhbmRfd2VpZ2h0cxUMcGZfbnVtX25vZGVzFgtwZl9tZW1fdXNlZBcMcGZfbm9kZV90eXBlGA5wZl9ub2RlX3BsYXllchkMcGZfbm9kZV9uYWN0Gg1wZl9ub2RlX2NoaWxkGw9wZl9ub2RlX2FjdHR5cGUcDnBmX25vZGVfYWN0YW10HQxwZl9ub2RlX2NhcmQeDnBmX25vZGVfc3RyZWV0HwpwZl9ub2RlX2MwIApwZl9ub2RlX2MxIQZwZl9wb3QiC3BmX3N0cmF0ZWd5IwhwZl9ldmFsNwcSAQAPX19zdGFja19wb2ludGVyCQgBAAUuZGF0YQA4CXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQxVYnVudHUgY2xhbmcRMTguMS4zICgxdWJ1bnR1MSkANQ90YXJnZXRfZmVhdHVyZXMDKw9tdXRhYmxlLWdsb2JhbHMrCHNpZ24tZXh0KwdzaW1kMTI4";
+function pfDriver(bytes) { // runs in a Web Worker (stringified) or inline as a fallback
+  let M = null, stop = false;
+  const ready = WebAssembly.instantiate(bytes, {}).then(r => { M = r.instance.exports; });
+  const F32 = (p, n) => new Float32Array(M.memory.buffer, p, n);
+  const U8 = (p, n) => new Uint8Array(M.memory.buffer, p, n);
+  function writeCfg(cfg) {
+    M.pf_reset();
+    const c = F32(M.pf_cfg_ptr(), 64); c.fill(0);
+    c[0] = cfg.pot; c[1] = cfg.stack; c[2] = cfg.board.length - 3; c[3] = cfg.board.length; cfg.board.forEach((x, i) => { c[4 + i] = x; });
+    c[9] = cfg.rake || 0; c[10] = cfg.rakeCap || 0; c[11] = cfg.allinThr || .67; c[12] = cfg.addAllin == null ? 1.5 : cfg.addAllin;
+    cfg.streets.forEach((s, k) => { const o = 13 + 16 * k, put = (arr, at) => arr.slice(0, 4).forEach((v, i) => { c[o + at + i] = v; });
+      c[o] = s.maxbets; c[o + 1] = Math.min(4, s.oop.length); put(s.oop, 2); c[o + 6] = Math.min(4, s.ip.length); put(s.ip, 7); c[o + 11] = Math.min(4, s.raise.length); put(s.raise, 12); });
+    const w = F32(M.pf_win_ptr(), 2652); w.set(cfg.w0, 0); w.set(cfg.w1, 1326);
+  }
+  return async function handle(m, post) {
+    if (m.cmd === "stop") { stop = true; return; }
+    await ready;
+    try {
+      if (m.cmd === "ping") post({ id: m.id, ok: true });
+      else if (m.cmd === "estimate") { writeCfg(m.cfg); const bytes = M.pf_estimate(); post({ id: m.id, bytes, nodes: M.pf_est_nodes(), floats: M.pf_est_floats() }); }
+      else if (m.cmd === "setup") {
+        writeCfg(m.cfg); const bytes = M.pf_estimate(), floats = M.pf_est_floats();
+        if (m.maxBytes && bytes > m.maxBytes) { post({ id: m.id, error: "mem", bytes }); return; }
+        const t0 = performance.now(); let r;
+        try { r = M.pf_setup(); } catch (e) { r = -9; }
+        post({ id: m.id, ok: r > 0, code: r, nodes: r, bytes, floats, ms: performance.now() - t0, mem: M.pf_mem_used(), hands: [M.pf_num_hands(0), M.pf_num_hands(1)], pot: M.pf_pot() });
+      } else if (m.cmd === "run") {
+        stop = false; const t0 = performance.now(); let tl = t0, it = 0, ex = null;
+        while (it < m.maxIter && !stop) {
+          M.pf_iterate(); it++;
+          if (it % m.every === 0 || it === m.maxIter) { ex = M.pf_exploitability(); post({ id: m.id, progress: true, iter: M.pf_iterations(), expl: ex, ms: performance.now() - t0 }); if (ex <= m.target) break; }
+          if (performance.now() - tl > 60) { await new Promise(r => setTimeout(r, 0)); tl = performance.now(); }
+        }
+        if (ex == null || it % m.every) ex = M.pf_exploitability();
+        post({ id: m.id, done: true, iter: M.pf_iterations(), expl: ex, ms: performance.now() - t0, ev: [M.pf_ev(0), M.pf_ev(1)], stopped: stop });
+      } else if (m.cmd === "hands") {
+        const n0 = M.pf_num_hands(0), n1 = M.pf_num_hands(1);
+        post({ id: m.id, h: [U8(M.pf_hand_cards(0), 2 * n0).slice(), U8(M.pf_hand_cards(1), 2 * n1).slice()], w: [F32(M.pf_hand_weights(0), n0).slice(), F32(M.pf_hand_weights(1), n1).slice()] });
+      } else if (m.cmd === "node") {
+        const i = m.node, t = M.pf_node_type(i), n = M.pf_node_nact(i), ch = M.pf_node_child(i);
+        const out = { id: m.id, node: i, type: t, player: M.pf_node_player(i), street: M.pf_node_street(i), c0: M.pf_node_c0(i), c1: M.pf_node_c1(i), children: [] };
+        if (t === 0 || t === 1) for (let k = 0; k < n; k++) out.children.push({ node: ch + k, type: M.pf_node_acttype(ch + k), amt: M.pf_node_actamt(ch + k), card: M.pf_node_card(ch + k) });
+        if (t === 0) { const H = M.pf_num_hands(out.player); out.strat = F32(M.pf_strategy(i), n * H).slice(); }
+        post(out);
+      }
+    } catch (e) { post({ id: m.id, error: "crash", message: String(e && e.message || e) }); }
+  };
+}
+const PF = (() => {
+  let worker = null, inline = null, mode = null, seq = 0, bytes = null, readyP = null;
+  const pending = new Map();
+  const getBytes = () => { if (!bytes) { const s = atob(PF_WASM_B64); bytes = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) bytes[i] = s.charCodeAt(i); } return bytes; };
+  const dispatch = m => { const p = pending.get(m.id); if (!p) return; if (m.progress) { if (p.onProgress) p.onProgress(m); return; } pending.delete(m.id); if (m.error) p.rej(m); else p.res(m); };
+  function useInline() { if (worker) { try { worker.terminate(); } catch (e) {} } worker = null; inline = pfDriver(getBytes()); mode = "inline"; }
+  function start() {
+    if (readyP) return readyP;
+    readyP = new Promise(resolve => {
+      try {
+        const src = `let h = null; onmessage = e => { const m = e.data; if (m.cmd === "init") { h = (${pfDriver.toString()})(m.bytes); h({ cmd: "ping", id: 0 }, x => postMessage(x)); return; } h(m, x => postMessage(x)); };`;
+        const url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        const w = new Worker(url);
+        const fail = () => { useInline(); resolve(); };
+        const timer = setTimeout(fail, 8000);
+        w.onerror = () => { clearTimeout(timer); fail(); };
+        w.onmessage = e => { if (e.data && e.data.id === 0) { clearTimeout(timer); worker = w; mode = "worker"; w.onmessage = ev => dispatch(ev.data); w.onerror = () => {}; resolve(); return; } dispatch(e.data); };
+        w.postMessage({ cmd: "init", bytes: getBytes() });
+      } catch (e) { useInline(); resolve(); }
+    });
+    return readyP;
+  }
+  async function call(msg, onProgress) {
+    await start();
+    const id = ++seq; msg.id = id;
+    return new Promise((res, rej) => { pending.set(id, { res, rej, onProgress }); if (mode === "worker") worker.postMessage(msg); else inline(msg, dispatch); });
+  }
+  function stop() { if (mode === "worker" && worker) worker.postMessage({ cmd: "stop" }); else if (inline) inline({ cmd: "stop" }, () => {}); }
+  function restart() { for (const [, p] of pending) p.rej({ error: "restart" }); pending.clear(); if (worker) { try { worker.terminate(); } catch (e) {} } worker = null; inline = null; mode = null; readyP = null; }
+  return { call, stop, restart, mode: () => mode };
+})();
+
+// ---- cards / ranges ----
+const PF_R = "23456789TJQKA", PF_S = "cdhs";
+const pfCard = s => { const r = PF_R.indexOf(s[0].toUpperCase()), u = PF_S.indexOf(s[1].toLowerCase()); return r < 0 || u < 0 ? -1 : r * 4 + u; };
+const pfCardStr = c => PF_R[c >> 2] + PF_S[c & 3];
+function pfParseBoard(t) {
+  const m = [...String(t || "").replace(/♠/g, "s").replace(/♥/g, "h").replace(/♦/g, "d").replace(/♣/g, "c").matchAll(/(10|[2-9tjqka])\s*([shdc])/gi)].map(x => pfCard((x[1] === "10" ? "T" : x[1]) + x[2]));
+  if (m.length < 3 || m.length > 5 || m.some(c => c < 0) || new Set(m).size !== m.length) return null;
+  return m;
+}
+function pfWeights(R) { // 169-class range -> 1326 combo weights (cards rank*4+suit, deuce = 0)
+  const w = new Float32Array(1326);
+  for (let b = 1; b < 52; b++) for (let a = 0; a < b; a++) {
+    const ra = 12 - (a >> 2), rb = 12 - (b >> 2), hi = Math.min(ra, rb), lo = Math.max(ra, rb);
+    const cls = ra === rb ? ra * 13 + ra : (a & 3) === (b & 3) ? hi * 13 + lo : lo * 13 + hi;
+    w[b * (b - 1) / 2 + a] = R[cls];
+  }
+  return w;
+}
+const pfClassOf = (a, b) => { const ra = 12 - (a >> 2), rb = 12 - (b >> 2), hi = Math.min(ra, rb), lo = Math.max(ra, rb); return ra === rb ? ra * 13 + ra : (a & 3) === (b & 3) ? hi * 13 + lo : lo * 13 + hi; };
+const PF_SPOTS = [
+  { id: "btn_bb", label: "BTN gegen BB (Single-Raised)", oopPos: "BB", ipPos: "BTN", oop: () => CASH.VSOPEN["BB<BTN"].c, ip: () => CASH.RFI.BTN, pot: 5.5, stack: 97.5 },
+  { id: "co_bb", label: "CO gegen BB (Single-Raised)", oopPos: "BB", ipPos: "CO", oop: () => CASH.VSOPEN["BB<CO"].c, ip: () => CASH.RFI.CO, pot: 5.5, stack: 97.5 },
+  { id: "hj_bb", label: "HJ gegen BB (Single-Raised)", oopPos: "BB", ipPos: "HJ", oop: () => CASH.VSOPEN["BB<HJ"].c, ip: () => CASH.RFI.HJ, pot: 5.5, stack: 97.5 },
+  { id: "utg_bb", label: "UTG gegen BB (Single-Raised)", oopPos: "BB", ipPos: "UTG", oop: () => CASH.VSOPEN["BB<UTG"].c, ip: () => CASH.RFI.UTG, pot: 5.5, stack: 97.5 },
+  { id: "sb_bb", label: "SB gegen BB (Single-Raised)", oopPos: "SB", ipPos: "BB", oop: () => CASH.RFI.SB, ip: () => CASH.VSOPEN["BB<SB"].c, pot: 6, stack: 97 },
+  { id: "co_btn", label: "CO gegen BTN-Call", oopPos: "CO", ipPos: "BTN", oop: () => CASH.RFI.CO, ip: () => CASH.VSOPEN["BTN<CO"].c, pot: 6.5, stack: 97.5 },
+  { id: "bb3_btn", label: "BB-3-Bet gegen BTN", oopPos: "BB", ipPos: "BTN", oop: () => CASH.VSOPEN["BB<BTN"].r, ip: () => CASH.VS3B["BTN|blinds"].c, pot: 22.5, stack: 89 },
+  { id: "sb3_btn", label: "SB-3-Bet gegen BTN", oopPos: "SB", ipPos: "BTN", oop: () => CASH.VSOPEN["SB<BTN"].r, ip: () => CASH.VS3B["BTN|blinds"].c, pot: 21, stack: 90 },
+  { id: "btn3_co", label: "BTN-3-Bet gegen CO", oopPos: "CO", ipPos: "BTN", oop: () => CASH.VS3B["CO|later"].c, ip: () => CASH.VSOPEN["BTN<CO"].r, pot: 16.5, stack: 92.5 },
+];
+const PF_DEFAULT_SIZES = [ // per start street: [flop, turn, river] {oop, ip, raise, max}
+  [{ oop: "", ip: "33", raise: "3", max: 2 }, { oop: "66", ip: "66", raise: "", max: 1 }, { oop: "75", ip: "75", raise: "", max: 1 }],
+  [null, { oop: "66", ip: "66", raise: "3", max: 2 }, { oop: "75", ip: "75", raise: "3", max: 2 }],
+  [null, null, { oop: "50, 100", ip: "50, 100", raise: "3", max: 3 }],
+];
+const pfNums = t => String(t || "").split(/[,;\s]+/).map(x => parseFloat(x.replace(",", "."))).filter(v => isFinite(v) && v > 0);
+function pfConfig(o) { // o: {oopR, ipR (class strings or Float32Array), board, pot, stack, sizes[3], rake, rakeCap}
+  const R = x => typeof x === "string" ? CASH.parse(x) : x;
+  const streets = [0, 1, 2].map(k => { const s = o.sizes[k] || { oop: "", ip: "", raise: "", max: 0 }; return { maxbets: s.max, oop: pfNums(s.oop).map(v => v / 100), ip: pfNums(s.ip).map(v => v / 100), raise: pfNums(s.raise) }; });
+  return { pot: o.pot, stack: o.stack, board: o.board, rake: o.rake == null ? .05 : o.rake, rakeCap: o.rakeCap == null ? 3 : o.rakeCap, allinThr: .67, addAllin: 1.5, streets, w0: pfWeights(R(o.oopR)), w1: pfWeights(R(o.ipR)) };
+}
+
+// ---- view state ----
+const pfs = { busy: false, spot: PF_SPOTS[0], custom: null, hands: null, cur: null, cache: new Map(), stack: [], names: ["OOP", "IP"], sizesEdited: false, result: null };
+const pfFmt = v => fmt((Math.round(v * 10) / 10).toFixed(Math.abs(v - Math.round(v)) < .05 ? 0 : 1));
+function pfStatus(kind, html) { const el = $("pfStatus"); if (!kind) { el.hidden = true; return; } el.hidden = false; el.className = "status" + (kind === "err" ? " err" : kind === "ok" ? " ok" : ""); $("pfSpin").hidden = kind !== "busy"; $("pfStatusText").innerHTML = html; }
+function pfFillSizes(st, force) {
+  if (pfs.sizesEdited && !force) return;
+  const def = PF_DEFAULT_SIZES[st];
+  ["F", "T", "R"].forEach((k, i) => { const d = def[i]; const row = $("pfRow" + k); row.hidden = !d;
+    if (d) { $("pfO" + k).value = d.oop; $("pfI" + k).value = d.ip; $("pfX" + k).value = d.raise; $("pfM" + k).value = d.max; } });
+}
+function pfReadSizes() { return ["F", "T", "R"].map(k => $("pfRow" + k).hidden ? null : { oop: $("pfO" + k).value, ip: $("pfI" + k).value, raise: $("pfX" + k).value, max: Math.max(0, Math.min(4, parseInt($("pfM" + k).value, 10) || 0)) }); }
+function pfSyncBoard() { const b = pfParseBoard($("pfBoard").value); if (b) { pfFillSizes(b.length - 3); } return b; }
+function pfInitView() {
+  $("pfSpot").innerHTML = PF_SPOTS.map(s => `<option value="${s.id}">${s.label}</option>`).join("") + `<option value="custom" hidden>Aus der Hand übernommen</option>`;
+  const setSpot = id => { const s = PF_SPOTS.find(x => x.id === id); if (!s) return; pfs.spot = s; pfs.custom = null; $("pfPot").value = s.pot; $("pfStack").value = s.stack; };
+  $("pfSpot").addEventListener("change", e => setSpot(e.target.value));
+  setSpot("btn_bb");
+  $("pfSpot").addEventListener("change", () => { pfs.custom = null; }); $("pfBoard").value = "Kd7c2s9h"; pfFillSizes(1, true);
+  $("pfBoard").addEventListener("change", pfSyncBoard);
+  $("pfRand").addEventListener("click", () => { const used = new Set(); const b = []; while (b.length < 3) { const c = Math.floor(Math.random() * 52); if (!used.has(c)) { used.add(c); b.push(c); } } b.sort((x, y) => y - x); $("pfBoard").value = b.map(pfCardStr).join(""); pfFillSizes(0, true); pfs.sizesEdited = false; });
+  document.querySelectorAll("#pfSizes input").forEach(i => i.addEventListener("input", () => { pfs.sizesEdited = true; }));
+  $("pfSolve").addEventListener("click", () => pfSolve());
+  $("pfStop").addEventListener("click", () => PF.stop());
+  $("pfBench").addEventListener("click", () => pfBench(false));
+  $("pfBenchFlop").addEventListener("click", () => pfBench(true));
+  $("pfHand").addEventListener("input", () => pfRenderNode());
+}
+// ---- solving ----
+async function pfSolve(opts) {
+  if (pfs.busy) return;
+  const board = pfParseBoard($("pfBoard").value);
+  if (!board) { pfStatus("err", "Board nicht lesbar. Gib 3 bis 5 Karten ein, z. B. Kd7c2s."); return; }
+  const pot = parseFloat(String($("pfPot").value).replace(",", ".")), stack = parseFloat(String($("pfStack").value).replace(",", "."));
+  if (!(pot > 0) || !(stack > 0)) { pfStatus("err", "Pot und Stack müssen größer als 0 sein."); return; }
+  const sp = pfs.custom || pfs.spot;
+  const cfg = pfConfig({ oopR: sp.oopR || sp.oop(), ipR: sp.ipR || sp.ip(), board, pot, stack, sizes: pfReadSizes() });
+  const target = parseFloat($("pfAcc").value), maxIter = board.length === 3 ? 400 : 1000;
+  pfs.busy = true; $("pfSolve").disabled = true; $("pfStop").hidden = false; $("pfResult").hidden = true;
+  pfStatus("busy", "Baue den Spielbaum …");
+  try {
+    const est = await PF.call({ cmd: "estimate", cfg });
+    const mb = est.bytes / 1e6;
+    if (mb > 1800) throw { msg: `Der Baum bräuchte etwa ${fmt(Math.round(mb))} MB Speicher. Nimm weniger Einsatzgrößen oder weniger Raises.` };
+    const su = await PF.call({ cmd: "setup", cfg, maxBytes: 2.2e9 });
+    if (!su.ok) throw { msg: su.code === -2 || su.code === -3 || su.code === -9 ? `Nicht genug Speicher auf diesem Gerät (${fmt(Math.round(mb))} MB nötig).` : `Aufbau fehlgeschlagen (Code ${su.code}).` };
+    const every = board.length === 3 ? 5 : board.length === 4 ? 10 : 20;
+    const t0 = performance.now();
+    const res = await PF.call({ cmd: "run", maxIter, target, every }, p => pfStatus("busy", `Rechne … Iteration ${p.iter} · Abweichung vom Gleichgewicht ${fmt(p.expl.toFixed(2))} % vom Pot · ${fmt(((performance.now() - t0) / 1000).toFixed(1))} s`));
+    pfs.result = { cfg, su, res, sp, board };
+    const nt = pfs.custom && pfs.custom.note ? ` <br>${pfs.custom.note}` : "";
+    pfStatus("ok", `${res.stopped ? "Gestoppt" : "Fertig"} in ${fmt((res.ms / 1000).toFixed(1))} s: ${res.iter} Iterationen, Abweichung ${fmt(res.expl.toFixed(2))} % vom Pot, ${fmt(Math.round(su.mem / 1e6))} MB Speicher, ${PF.mode() === "worker" ? "im Hintergrund-Thread" : "im Hauptthread"}.${nt}`);
+    await pfOpenResult(sp, board);
+    if (opts && opts.then) opts.then();
+  } catch (e) {
+    pfStatus("err", e && e.msg ? e.msg : e && e.error === "mem" ? "Zu wenig Speicher für diesen Baum." : `Fehler beim Rechnen${e && e.message ? ": " + e.message : ""}.`);
+  } finally { pfs.busy = false; $("pfSolve").disabled = false; $("pfStop").hidden = true; }
+}
+async function pfOpenResult(sp, board) {
+  const hs = await PF.call({ cmd: "hands" });
+  pfs.hands = { h: hs.h, w: hs.w, cls: hs.h.map(arr => { const o = new Int16Array(arr.length / 2); for (let i = 0; i < o.length; i++) o[i] = pfClassOf(arr[2 * i], arr[2 * i + 1]); return o; }) };
+  pfs.cache = new Map(); pfs.names = [sp.oopPos || "OOP", sp.ipPos || "IP"];
+  pfs.stack = [{ node: 0, reach: [hs.w[0].slice(), hs.w[1].slice()], label: `${["Flop", "Turn", "River"][board.length - 3]} ${board.map(c => pfCardStr(c)).map(s => s[0] + SUITS[s[1]]).join(" ")}` }];
+  $("pfResult").hidden = false;
+  await pfRenderNode();
+}
+const pfNode = async id => { if (!pfs.cache.has(id)) pfs.cache.set(id, await PF.call({ cmd: "node", node: id })); return pfs.cache.get(id); };
+const PF_ACT = { 0: "Fold", 1: "Check", 2: "Call", 3: "Bet", 4: "Raise", 5: "All-in" };
+function pfActLabel(n, c) {
+  const pot = pfs.result.cfg.pot + n.c0 + n.c1;
+  if (c.type === 3) return `Bet ${pfFmt(c.amt)} (${Math.round(c.amt / pot * 100)} %)`;
+  if (c.type === 4) return `Raise auf ${pfFmt(c.amt)}`;
+  if (c.type === 5) return `All-in ${pfFmt(c.amt)}`;
+  return PF_ACT[c.type];
+}
+const PF_COLORS = t => t === 0 ? "var(--limp)" : t === 1 || t === 2 ? "var(--call)" : t === 5 ? "#8e1f1f" : null;
+function pfActColors(children) { const bets = children.filter(c => c.type >= 3 && c.type !== 5); return children.map(c => PF_COLORS(c.type) || ["#e3a52a", "#e07a2a", "#d2492f", "#b8323a"][Math.min(3, bets.indexOf(c))]); }
+async function pfGo(k) {
+  const top = pfs.stack[pfs.stack.length - 1], n = await pfNode(top.node), c = n.children[k];
+  const reach = [top.reach[0].slice(), top.reach[1].slice()];
+  if (n.type === 0) { const H = pfs.hands.h[n.player].length / 2; for (let h = 0; h < H; h++) reach[n.player][h] *= n.strat[k * H + h]; }
+  let label;
+  if (n.type === 1) { for (let p = 0; p < 2; p++) { const hc = pfs.hands.h[p]; for (let h = 0; h < hc.length / 2; h++) if (hc[2 * h] === c.card || hc[2 * h + 1] === c.card) reach[p][h] = 0; } const s = pfCardStr(c.card); label = `${n.street === 0 ? "Turn" : "River"} ${s[0]}${SUITS[s[1]]}`; }
+  else label = `${pfs.names[n.player]} ${pfActLabel(n, c)}`;
+  pfs.stack.push({ node: c.node, reach, label });
+  await pfRenderNode();
+}
+async function pfRenderNode() {
+  if (!pfs.stack.length || !pfs.result) return;
+  const top = pfs.stack[pfs.stack.length - 1], n = await pfNode(top.node);
+  $("pfPath").innerHTML = pfs.stack.map((s, i) => `<button type="button" class="ca${i === pfs.stack.length - 1 ? " hero" : ""}" data-pfback="${i}">${s.label}</button>`).join("");
+  $("pfPath").querySelectorAll("[data-pfback]").forEach(b => b.onclick = () => { pfs.stack.length = +b.dataset.pfback + 1; pfRenderNode(); });
+  const pot = pfs.result.cfg.pot + n.c0 + n.c1;
+  const el = $("pfNodeBox"), grid = $("pfGrid");
+  grid.replaceChildren(); $("pfLegend").innerHTML = ""; $("pfHandOut").innerHTML = "";
+  if (n.type === 2 || n.type === 3) { el.innerHTML = `<p class="pf-end">${n.type === 2 ? `${pfs.names[n.player]} foldet. Die Hand ist vorbei.` : "Showdown."} Pot ${pfFmt(pot)} BB.</p>`; return; }
+  if (n.type === 1) {
+    const avail = new Set(n.children.map(c => c.card));
+    el.innerHTML = `<p class="pf-q">${n.street === 0 ? "Turn" : "River"}-Karte wählen · Pot ${pfFmt(pot)} BB</p><div class="pf-cards">${[3, 2, 1, 0].map(u => PF_R.split("").reverse().map(r => { const c = PF_R.indexOf(r) * 4 + u; const k = n.children.findIndex(x => x.card === c); return `<button type="button" class="pcard ${PF_S[u]}" ${avail.has(c) ? `data-pfk="${k}"` : "disabled"}>${r}${SUITS[PF_S[u]]}</button>`; }).join("")).join("")}</div>`;
+    el.querySelectorAll("[data-pfk]").forEach(b => b.onclick = () => pfGo(+b.dataset.pfk));
+    return;
+  }
+  const p = n.player, H = pfs.hands.h[p].length / 2, reach = top.reach[p], na = n.children.length, cols = pfActColors(n.children);
+  const tot = reach.reduce((a, b) => a + b, 0) || 1;
+  const freq = n.children.map((c, k) => { let s = 0; for (let h = 0; h < H; h++) s += reach[h] * n.strat[k * H + h]; return s / tot; });
+  el.innerHTML = `<p class="pf-q"><b>${pfs.names[p]}</b> ist am Zug · Pot ${pfFmt(pot)} BB</p><div class="pf-acts">${n.children.map((c, k) => `<button type="button" class="pf-act" data-pfk="${k}"><i style="background:${cols[k]}"></i><span>${pfActLabel(n, c)}</span><b>${Math.round(freq[k] * 100)} %</b></button>`).join("")}</div>`;
+  el.querySelectorAll("[data-pfk]").forEach(b => b.onclick = () => pfGo(+b.dataset.pfk));
+  // grid: action mix per hand class, weighted by how often the hand gets here
+  const W = new Float64Array(169), A = Array.from({ length: na }, () => new Float64Array(169)), full = new Float64Array(169);
+  const w0 = pfs.stack[0].reach[p], cls = pfs.hands.cls[p];
+  for (let h = 0; h < H; h++) { const k = cls[h]; full[k] += w0[h]; const r = reach[h]; if (r <= 0) continue; W[k] += r; for (let a = 0; a < na; a++) A[a][k] += r * n.strat[a * H + h]; }
+  const pc = parseCards($("pfHand").value || ""), hand = pc ? pc.cs.map(x => pfCard(x.r + x.s)) : null;
+  let hi = -1;
+  if (hand && hand.length >= 2) hi = pfClassOf(hand[0], hand[1]);
+  for (let k = 0; k < 169; k++) {
+    const d = document.createElement("div"); d.className = "mcell"; d.textContent = handName(k);
+    if (W[k] > 1e-9) { let acc = 0; const seg = []; for (let a = 0; a < na; a++) { const f = A[a][k] / W[k] * 100; if (f < .5) continue; seg.push(`${cols[a]} ${acc.toFixed(1)}% ${(acc + f).toFixed(1)}%`); acc += f; }
+      d.style.background = `linear-gradient(90deg, ${seg.join(", ")})`; d.style.color = "#fff"; d.style.opacity = String(Math.max(.35, Math.min(1, W[k] / (full[k] || 1)))); }
+    if (k === hi) d.classList.add("hero");
+    grid.appendChild(d);
+  }
+  $("pfLegend").innerHTML = `<div class="clegend">${n.children.map((c, k) => `<span><i style="background:${cols[k]}"></i>${pfActLabel(n, c)}</span>`).join("")}<span>blass = selten bis hier</span></div>`;
+  if (hand && hand.length >= 2) {
+    const a = Math.min(hand[0], hand[1]), b = Math.max(hand[0], hand[1]), hc = pfs.hands.h[p];
+    let h = -1; for (let i = 0; i < H; i++) if (hc[2 * i] === a && hc[2 * i + 1] === b) { h = i; break; }
+    const nm = pfCardStr(hand[0]) + pfCardStr(hand[1]);
+    $("pfHandOut").innerHTML = h < 0 ? `<p class="cnote">${nm} ist nicht in der Range von ${pfs.names[p]}.</p>` : reach[h] <= 1e-6 ? `<p class="cnote">${nm} kommt mit dieser Line nicht hierher.</p>`
+      : `<div class="pf-hand">${n.children.map((c, k) => `<div><i style="background:${cols[k]}"></i>${pfActLabel(n, c)}<b>${Math.round(n.strat[k * H + h] * 100)} %</b></div>`).join("")}</div>`;
+  }
+}
+// ---- speed test ----
+async function pfBench(realFlop) {
+  if (pfs.busy) return; pfs.busy = true; $("pfBench").disabled = true; $("pfBenchFlop").disabled = true;
+  const out = $("pfBenchOut"); const rows = [];
+  const show = (extra) => { out.innerHTML = `<div class="tablewrap"><table class="stable"><thead><tr><th>Test</th><th class="num">Zeit</th><th>Details</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r[0]}</td><td class="num mono">${r[1]}</td><td>${r[2]}</td></tr>`).join("")}</tbody></table></div>${extra || ""}`; };
+  const sp = PF_SPOTS[0], secs = ms => ms < 1000 ? `${Math.round(ms)} ms` : `${fmt((ms / 1000).toFixed(1))} s`;
+  const mk = (board, st) => pfConfig({ oopR: sp.oop(), ipR: sp.ip(), board: board.match(/../g).map(pfCard), pot: sp.pot, stack: sp.stack, sizes: PF_DEFAULT_SIZES[st] });
+  try {
+    if (!realFlop) {
+      rows.push(["River", "…", "rechne"]); show();
+      let su = await PF.call({ cmd: "setup", cfg: mk("Kd7c2s9hTd", 2) }), r = await PF.call({ cmd: "run", maxIter: 1000, target: .3, every: 20 });
+      rows[0] = ["River", secs(su.ms + r.ms), `${r.iter} Iterationen bis ${fmt(r.expl.toFixed(2))} % · 2 Größen + Raise`];
+      rows.push(["Turn", "…", "rechne"]); show();
+      su = await PF.call({ cmd: "setup", cfg: mk("Kd7c2s9h", 1) }); r = await PF.call({ cmd: "run", maxIter: 1000, target: 1, every: 10 });
+      const perFloat = r.ms / r.iter / su.floats;
+      rows[1] = ["Turn", secs(su.ms + r.ms), `${r.iter} Iterationen bis ${fmt(r.expl.toFixed(2))} % · ${fmt(Math.round(su.mem / 1e6))} MB`];
+      const est = await PF.call({ cmd: "estimate", cfg: mk("Kd7c2s", 0) });
+      const iters = 90, flopMs = perFloat * est.floats * iters;
+      rows.push(["Flop (hochgerechnet)", `~${fmt(Math.round(flopMs / 60000 * 10) / 10)} min`, `vereinfachter Baum, ${fmt(Math.round(est.bytes / 1e6))} MB Speicher`]);
+      const lib = flopMs * 300 / 3600000;
+      pfs.bench = { perFloat, flopMs, flopMB: est.bytes / 1e6, at: Date.now() };
+      show(`<p class="cnote">Bibliothek mit 300 Flops (6 Spots × 50 Flops) auf diesem Gerät: etwa <strong>${fmt(lib.toFixed(lib < 10 ? 1 : 0))} Stunden</strong>. Rechnet ${PF.mode() === "worker" ? "in einem Hintergrund-Thread" : "im Hauptthread (Hintergrund-Thread hier nicht erlaubt)"}. Mit „Flop echt testen“ prüfst du, ob der Speicher für einen echten Flop reicht.</p>`);
+      $("pfBenchFlop").hidden = false;
+    } else {
+      rows.push(["Flop echt", "…", "baue Baum"]); show();
+      const su = await PF.call({ cmd: "setup", cfg: mk("Kd7c2s", 0), maxBytes: 2.2e9 });
+      if (!su.ok) { rows[0] = ["Flop echt", "–", `Speicher reicht nicht (${fmt(Math.round(su.bytes / 1e6))} MB nötig)`]; show(); }
+      else {
+        const r = await PF.call({ cmd: "run", maxIter: 3, target: 0, every: 3 });
+        const per = r.ms / 3;
+        rows[0] = ["Flop echt", `${secs(per)} / Iteration`, `Baum aufgebaut in ${secs(su.ms)}, ${fmt(Math.round(su.mem / 1e6))} MB · ein Flop mit ~90 Iterationen ≈ ${fmt((per * 90 / 60000).toFixed(1))} min`];
+        show(`<p class="cnote">Der Speicher hat gereicht. Bibliothek mit 300 Flops auf diesem Gerät: etwa <strong>${fmt((per * 90 * 300 / 3600000).toFixed(1))} Stunden</strong>.</p>`);
+      }
+      PF.restart(); // free the memory of the big tree
+    }
+  } catch (e) { rows.push(["Fehler", "–", e && (e.message || e.msg || e.error) || "unbekannt"]); show(); PF.restart(); }
+  finally { pfs.busy = false; $("pfBench").disabled = false; $("pfBenchFlop").disabled = false; }
+}
+// ---- from a tracked hand into the solver ----
+function pfRangesFromLine(pre) {
+  const acts = pre.filter(a => a.t !== "post");
+  const folded = new Set(acts.filter(a => a.t === "fold").map(a => a.pos));
+  const inHand = [...new Set(acts.map(a => a.pos))].filter(p => !folded.has(p));
+  const raises = acts.filter(a => a.t === "raise" || a.t === "bet");
+  if (inHand.length !== 2 || !raises.length) return null;
+  const opener = raises[0].pos;
+  if (raises.length === 1) {
+    const caller = inHand.find(p => p !== opener); if (!caller) return null;
+    const d = CASH.VSOPEN[`${caller}<${opener}`];
+    if (d && d.c) return { [opener]: CASH.RFI[opener], [caller]: d.c, kind: "SRP" };
+    const alt = CASH.VSOPEN[`BB<${opener}`] || CASH.VSOPEN["BB<BTN"];
+    return { [opener]: CASH.RFI[opener], [caller]: alt.c, kind: "SRP", note: `${caller} callt laut Referenz nie gegen einen ${opener}-Open; als Call-Range ist die BB-Verteidigung angenommen.` };
+  }
+  if (raises.length === 2) {
+    const tb = raises[1].pos; if (!inHand.includes(opener) || !inHand.includes(tb)) return null;
+    const d = CASH.VSOPEN[`${tb}<${opener}`]; if (!d) return null;
+    const key = opener === "SB" ? "SB|BB" : opener === "BTN" ? "BTN|blinds" : `${opener}|${["SB", "BB"].includes(tb) ? "blinds" : "later"}`;
+    const c3 = CASH.VS3B[key]; if (!c3) return null;
+    return { [tb]: d.r, [opener]: c3.c, kind: "3-Bet-Pot" };
+  }
+  return null;
+}
+// o: {pre (preflop acts), heroPos, board (card strings), pot, stack}
+function pfOpenFromHand(o) {
+  const R = pfRangesFromLine(o.pre); if (!R) return "Für diese Preflop-Line gibt es keine Ranges (nur Single-Raised- und 3-Bet-Pots heads-up).";
+  const pos = Object.keys(R).filter(k => k !== "kind" && k !== "note"); const [a, b] = pos; const oopPos = CASH.ipOf(a, b) ? b : a, ipPos = oopPos === a ? b : a;
+  const board = o.board.filter(Boolean); if (board.length < 3) return "Das Board wurde nicht vollständig erkannt.";
+  pfs.custom = { oopPos, ipPos, oopR: R[oopPos], ipR: R[ipPos], label: `${ipPos} gegen ${oopPos} (${R.kind})`, note: [R.note, o.street > 1 ? "Die Ranges sind die Preflop-Ranges, noch nicht durch die Action auf den früheren Straßen eingeengt; das kommt mit der Flop-Bibliothek." : ""].filter(Boolean).join(" ") };
+  $("pfSpot").value = "custom"; $("pfSpot").querySelector('option[value="custom"]').hidden = false;
+  $("pfSpot").querySelector('option[value="custom"]').textContent = pfs.custom.label;
+  $("pfBoard").value = board.join(""); $("pfPot").value = Math.round(o.pot * 10) / 10; $("pfStack").value = Math.round(o.stack * 10) / 10;
+  pfs.sizesEdited = false; pfFillSizes(board.length - 3, true);
+  setView("solver"); try { history.replaceState(null, "", "#solver"); } catch (e) {}
+  window.scrollTo({ top: 0 });
+  if (board.length >= 4) pfSolve(); else pfStatus("ok", "Flop-Spot übernommen. Ein Flop dauert auf dem Handy einige Minuten; tippe auf „Lösen“, wenn du warten willst.");
+  return null;
+}
+pfInitView();
 
 setExample();
 renderReview();
