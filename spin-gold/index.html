@@ -2219,10 +2219,15 @@ $("vCamBtn").addEventListener("click", async () => {
   } catch (e) {
     $("vMain").hidden = true;
     vLive("", false);
-    const msg = e && e.name === "NotAllowedError" ? "Kamerazugriff wurde abgelehnt. Erlaube die Kamera in den Safari-Einstellungen für diese Seite." : "In dieser Ansicht gibt es keinen Kamerazugriff. Öffne die Web-App-Version dieser Seite; die Videodatei kannst du hier trotzdem auswerten.";
-    $("vDropNote").hidden = false; $("vDropNote").textContent = msg;
+    const msg = !camHome() ? camHint() : e && e.name === "NotAllowedError" ? "Kamerazugriff wurde abgelehnt. Erlaube die Kamera in Safari: in der Adressleiste auf „aA“ tippen, dann Website-Einstellungen, Kamera, Erlauben. Für die Web-App auf dem Home-Bildschirm: Einstellungen, Apps, Safari, Kamera." : "Dieser Browser gibt hier keinen Kamerazugriff. Öffne die Seite in Safari.";
+    $("vDropNote").hidden = false; $("vDropNote").innerHTML = msg;
   }
 });
+// the camera only works in the web app (Safari / home screen), not inside the Claude app window
+const APP_URL = "https://markusloechli27-wq.github.io/spin-gold/";
+function camHome() { let top = true; try { top = window.self === window.top; } catch (e) { top = false; } return top && /github\.io$/.test(location.hostname); }
+function camHint() { return `Im Claude-Fenster ist die Kamera gesperrt. Öffne die Web-App in Safari: <a href="${APP_URL}" target="_blank" rel="noopener">${APP_URL.replace("https://", "")}</a>. Dort über Teilen „Zum Home-Bildschirm“ wählen, dann startet sie wie eine App. Videodateien kannst du auch hier auswerten.`; }
+if (!camHome()) { $("vDropNote").hidden = false; $("vDropNote").innerHTML = camHint(); }
 // four-corner perspective correction
 let quadPts = [];
 function drawQuad() {
