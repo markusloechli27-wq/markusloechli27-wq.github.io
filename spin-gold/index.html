@@ -2698,11 +2698,11 @@ function handleRead(r, t, manual) {
   if (vr.pending && !raw.buttons) {
     const sp = vr.pending, hs = heroOf(raw);
     if (hs && sp.start && hs.stack <= Math.max(.04 * sp.start, .05) && (hs.bet || 0) > 0) setAct(sp, sp.ev && sp.ev.aggr ? sp.ev.aggr : "push");
-    else if (!raw.hero_cards || (sp.cards && raw.hero_cards !== sp.cards)) setAct(sp, "fold");
+    else if (sp.cards && (!raw.hero_cards || raw.hero_cards !== sp.cards)) setAct(sp, "fold");   // unreadable cards are no fold
     else if (t - sp.t > 10) vr.pending = null;
   }
-  if (raw.buttons && !post && raw.hero_cards) {
-    const key = raw.hero_cards + "|" + raw.seats.map(s => Math.round((s.stack + (s.bet || 0)) * 2)).sort((a, b) => a - b).join(",");
+  if (raw.buttons && !post && (raw.hero_cards || !vr.multi)) {   // single table: a decision without readable cards can get them from the picker
+    const key = (raw.hero_cards || "?") + "|" + raw.seats.map(s => Math.round((s.stack + (s.bet || 0)) * 2)).sort((a, b) => a - b).join(",");
     if (key !== vr.lastKey) {
       vr.lastKey = key;
       const sp = spotFromRaw(raw, t); sp.SH = SH; sp.early = SH ? earlyAdvice(SH) : null; vr.spots.push(sp); vr.pending = sp; vr.cur = sp;
@@ -2757,7 +2757,9 @@ function renderVPanel(sp) {
   if (!sp) { el.innerHTML = `<p class="muted">Starte das Video. Sobald du am Zug bist (Aktions-Buttons sichtbar), erscheint hier die Auswertung.</p>`; return; }
   const e = sp.ev, card = parseCards(sp.cards || "");
   const head = `<div class="vp-head"><span class="vp-time">${mtTag(sp)}${tFmt(sp.t)}</span><span class="vp-spot">${e && e.s ? e.s.title : "Entscheidung"}</span></div>`;
-  if (!e || e.skip) { const ea = sp.early; el.innerHTML = head + `<p>${e && e.skip ? e.skip : "Nicht bewertbar."}</p>` + (ea && ea.view ? quadRange(ea.title, `${fmt(ea.S)} BB · Solver`, ea.view.layers, ea.view.rest, ea.idx, ea.freqs.map(x => `${EARLY_LABEL[x.a] || x.a} ${x.v == null ? "" : Math.round(x.v * 100) + " %"}`).join(" · ")) : ""); return; }
+  if (!e || e.skip) { const ea = sp.early, why = e && e.skip === "Daten unvollständig" ? (!card ? "Deine Karten sind auf dem Bild nicht lesbar." : "Nicht alle Stacks sind lesbar.") : "";
+    el.innerHTML = head + `<p>${e && e.skip ? e.skip : "Nicht bewertbar."}${why ? " " + why : ""}</p>` + (!card ? `<p><button type="button" class="btn" id="vPickCards">Karten wählen</button></p>` : "") + (ea && ea.view ? quadRange(ea.title, `${fmt(ea.S)} BB · Solver`, ea.view.layers, ea.view.rest, ea.idx, "") : "");
+    const pb = $("vPickCards"); if (pb) pb.onclick = () => openCardPick(sp.table || 0); return; }
   const vt = VTYPES.find(v => v.id === vr.vtype);
   const stk = e.x.map((v, i) => `${(e.x.length === 3 ? ["BTN", "SB", "BB"] : ["SB", "BB"])[i]} ${fmt(v.toFixed(1))}`).join(" · ");
   const modelTxt = e.model === "cev" ? "ChipEV" : "ICM";
@@ -4433,6 +4435,7 @@ function renderQuad(force) {
 const pick = { table: 0, hero: [], board: [] };
 function openCardPick(i) {
   pick.table = i; const ov = (mt.over || {})[i] || {}; pick.hero = (ov.hero || []).slice(); pick.board = (ov.board || []).slice();
+  if (typeof vr !== "undefined" && !vr.multi && vr.cur && vr.cur.raw) { const r = vr.cur.raw; if (!pick.board.length && r.board_cards) pick.board = r.board_cards.filter(Boolean); }
   const q = quadData(i); if (q && q.H) { if (!pick.hero.length && q.H.cards) { const cp = parseCards(q.H.cards); if (cp) pick.hero = cp.cs.map(c => c.r + c.s); } if (!pick.board.length && q.H.street) pick.board = (q.H.streets[q.H.street].board || []).filter(Boolean).slice(); }
   try { vid.pause(); } catch (e) {}
   $("cardPick").hidden = false; drawCardPick();
@@ -4456,7 +4459,7 @@ function applyCardPick() {
   if (H && pick.hero.length === 2) H.cards = pick.hero.join("");
   if (H && H.street && pick.board.length >= 3) { const st = H.streets[H.street]; st.board = pick.board.slice(0, H.street === 1 ? 3 : H.street === 2 ? 4 : 5); }
   // re-evaluate the table's last spin decision with the picked cards
-  for (let j = vr.spots.length - 1; j >= 0; j--) { const sp = vr.spots[j]; if (sp.table !== pick.table) continue;
+  for (let j = vr.spots.length - 1; j >= 0; j--) { const sp = vr.spots[j]; if ((sp.table || 0) !== pick.table) continue;   // single-table video: no table index
     if (!sp.cash && pick.hero.length === 2) { const act = sp.act; sp.raw = Object.assign({}, sp.raw, { hero_cards: pick.hero.join("") }); const ns = spotFromRaw(sp.raw, sp.t); Object.assign(sp, { d: ns.d, H: ns.H, ev: ns.ev, cards: ns.cards }); if (act) setAct(sp, act); }
     else if (sp.cash && pick.hero.length === 2 && sp.d.street === 0) { sp.d.h = parseCards(pick.hero.join("")).idx; if (sp.d.ctx) sp.d.res = CASH.evaluate(sp.d.ctx, sp.d.h, sp.d.act, ct.vtype, sp.d.eff); }
     break; }
