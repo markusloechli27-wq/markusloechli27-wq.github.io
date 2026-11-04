@@ -57,7 +57,7 @@ static int build(St s, int last, int parent) {
       opts[no++] = A_J; }
     else { opts[no++] = A_X; if (s.limpers == 1 && nactive(&s) == 2 && X[p] > 4.5) opts[no++] = A_R3; opts[no++] = A_J; }
   } else { opts[no++] = A_F; opts[no++] = A_C;
-    if (isBB && s.raises == 1 && s.cur <= 2 + 1e-9 && nactive(&s) == 2 && X[p] >= 18) opts[no++] = A_3B;   // BB 3-bets a minraise to 6 BB
+    if (s.raises == 1 && 2.25 * s.cur <= 0.4 * X[p] + 1e-9) opts[no++] = A_3B;   // small 3-bet to 2.25x the raise while it is at most 40 % of the stack
     opts[no++] = A_J; }
   n->nact = no;
   for (int k = 0; k < no; k++) {
@@ -70,7 +70,7 @@ static int build(St s, int last, int parent) {
       case A_L: c.inv[p] = 1; c.limpers++; break;
       case A_R2: c.inv[p] = 2; c.cur = 2; c.aggr = p; c.raises++; for (int q = 0; q < NPL; q++) if (q != p) c.acted[q] = 0; break;
       case A_R3: c.inv[p] = 3; c.cur = 3; c.aggr = p; c.raises++; for (int q = 0; q < NPL; q++) if (q != p) c.acted[q] = 0; break;
-      case A_3B: c.inv[p] = 6; c.cur = 6; c.aggr = p; c.raises++; for (int q = 0; q < NPL; q++) if (q != p) c.acted[q] = 0; break;
+      case A_3B: c.inv[p] = 2.25 * s.cur; c.cur = 2.25 * s.cur; c.aggr = p; c.raises++; for (int q = 0; q < NPL; q++) if (q != p) c.acted[q] = 0; break;
       case A_J: c.inv[p] = X[p]; if (X[p] > c.cur) c.cur = X[p]; c.jam = 1; c.aggr = p; for (int q = 0; q < NPL; q++) if (q != p) c.acted[q] = 0; break;
     }
     n = &N[id]; n->child[k] = build(c, p, id); n = &N[id];
