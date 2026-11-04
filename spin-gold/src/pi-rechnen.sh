@@ -4,11 +4,11 @@
 # Einrichten und starten (ein Befehl, im Terminal auf dem Pi):
 #   wget -qO- https://markusloechli27-wq.github.io/spin-gold/src/pi.sh | sh
 #
+#   Fragt einmal nach deinem Passwort und richtet die Rechnung als Dienst ein (wie Jarvis): sie läuft weiter,
+#   wenn du die Verbindung schließt, startet nach einem Neustart des Pi von selbst und nach einem Abbruch neu.
 #   Die Zahl paralleler Rechnungen (bis 4) wählt es selbst nach freiem RAM; jede braucht bis etwa 600 MB.
 #   Selbst festlegen: … | sh -s 2. Die Rechnungen laufen mit niedrigster Priorität, andere Dienste auf dem Pi
-#   (z. B. Jarvis) haben immer Vorrang. Der Pi sollte einen Lüfter haben, sonst drosselt er unter Dauerlast.
-#   Es läuft im Hintergrund weiter, auch wenn du das Terminal schließt; nach einem Neustart des Pi denselben
-#   Befehl nochmal, dann macht es dort weiter, wo es aufgehört hat.
+#   (z. B. Jarvis) haben immer Vorrang; wird der Speicher knapp, beendet der Pi zuerst den Solver.
 #
 # Stand ansehen:              cd ~/flops && sh pi-rechnen.sh status
 # Fortschritt ansehen:        cd ~/flops && tail -f log-0.txt        (beenden mit Strg+C, das Rechnen läuft weiter)
@@ -16,11 +16,15 @@
 #                             zeigt eine Adresse, die du im iPhone-Browser öffnest (über Tailscale auch unterwegs). Die Datei landet in
 #                             „Downloads“; in der App unter Solver > Flop-Bibliothek > „Importieren“ auswählen.
 #                             Es kommen nur die Flops, die seit dem letzten Senden neu sind. Alles nochmal: sh pi-rechnen.sh senden alles
-# Stoppen:                    pkill pflib
+# Stoppen:                    cd ~/flops && sh pi-rechnen.sh stopp
 cd "$(dirname "$0")" || exit 1
+DIR=$(pwd)
+
+instances() { systemctl list-units --all --plain --no-legend 'flops@*' 2>/dev/null | awk '{ print $1 }'; }
 
 if [ "$1" = "status" ]; then
-  echo "Rechnungen aktiv: $(pgrep -xc pflib)"
+  svc=$(instances | while read -r u; do systemctl is-active --quiet "$u" && echo x; done | wc -l)
+  echo "Rechnungen aktiv: $(pgrep -xc pflib)$( [ "$svc" -gt 0 ] && echo " (als Dienst, startet nach einem Neustart von selbst)")"
   echo "Fertige Flops: $(cat ergebnis-*.jsonl 2>/dev/null | wc -l) von $(grep -c '^F ' pi-auftrag.txt 2>/dev/null)"
   command -v vcgencmd > /dev/null && vcgencmd measure_temp 2>/dev/null
   free -h | head -2
@@ -57,18 +61,73 @@ except OSError as e: print('Server startet nicht:', e)"
   exit 0
 fi
 
-if pgrep -x pflib > /dev/null; then echo "Läuft schon ($(pgrep -xc pflib) Rechnungen). Stand: sh pi-rechnen.sh status"; exit 0; fi
+if [ "$1" = "stopp" ]; then
+  for u in $(instances); do sudo systemctl disable --now "$u" > /dev/null 2>&1; done
+  pkill -x pflib 2> /dev/null
+  echo "Gestoppt. Fertige Flops bleiben erhalten; neu starten mit: sh pi-rechnen.sh"
+  exit 0
+fi
+
+# ---- starten ----
 if [ -n "$1" ]; then N=$1; else
   avail=$(awk '/MemAvailable/ { print int($2 / 1024) }' /proc/meminfo); cores=$(nproc)
+  [ -f .teile ] && pgrep -x pflib > /dev/null && avail=$((avail + $(cat .teile) * 500))   # running solvers will be replaced
   N=$(( (avail - 500) / 600 )); [ "$N" -gt "$cores" ] && N=$cores; [ "$N" -gt 4 ] && N=4; [ "$N" -lt 1 ] && N=1
   echo "Freier RAM: $avail MB, also $N parallele Rechnungen."
 fi
-[ -f pi-auftrag.txt ] || { echo "pi-auftrag.txt fehlt in $(pwd)"; exit 1; }
+[ -f pi-auftrag.txt ] || { echo "pi-auftrag.txt fehlt in $DIR"; exit 1; }
 gcc -O3 -march=native -o pflib pflib.c -lm 2>/dev/null || { echo "Kompilieren fehlgeschlagen. Einmal ausführen: sudo apt install -y build-essential"; exit 1; }
-i=0
-while [ $i -lt "$N" ]; do
-  # lowest CPU priority; if memory ever runs out, the kernel stops the solver first, never Jarvis or other services
-  nohup sh -c 'echo 1000 > /proc/self/oom_score_adj 2>/dev/null; exec nice -n 19 ./pflib "$@"' pflib pi-auftrag.txt $i "$N" ergebnis-$i.jsonl ergebnis-*.jsonl > log-$i.txt 2>&1 &
-  i=$((i + 1))
-done
-echo "$N Rechnungen gestartet. Stand ansehen: cd ~/flops && sh pi-rechnen.sh status"
+
+# remember whether an earlier run had stopped, to say why at the end (only a hint)
+stopped=0; if [ -f log-0.txt ] && ! pgrep -x pflib > /dev/null && [ "$(cat ergebnis-*.jsonl 2>/dev/null | wc -l)" -gt 0 ]; then stopped=1; last=$(stat -c %Y log-0.txt); fi
+hint() {
+  [ "$stopped" = 1 ] || return 0
+  boot=$(date -d "$(uptime -s)" +%s 2>/dev/null || echo 0)
+  oom=$(sudo -n journalctl -k --since=-7d --no-pager 2>/dev/null | grep -ci "killed process.*pflib")
+  if [ "$boot" -gt "$last" ]; then echo "Warum es stand: Der Pi wurde neu gestartet ($(uptime -s)). Ab jetzt startet die Rechnung danach von selbst."
+  elif [ "${oom:-0}" -gt 0 ]; then echo "Warum es stand: Der Pi hat den Solver ${oom}-mal wegen Speicherknappheit beendet. Ab jetzt startet er nach 2 Minuten von selbst neu."
+  else echo "Warum es stand: vermutlich beendet, als die Terminal-Verbindung zuging. Als Dienst passiert das nicht mehr."; fi
+}
+
+pkill -x pflib 2> /dev/null   # old runs started without the service
+echo "$N" > .teile
+
+if command -v systemctl > /dev/null && [ -d /run/systemd/system ]; then
+  ME=$(id -un)
+  echo "Einmal dein Passwort, damit die Rechnung als Dienst läuft (wie Jarvis):"
+  printf '%s\n' "[Unit]
+Description=Flop-Bibliothek Poker Review, Teil %i
+After=network.target
+
+[Service]
+Type=simple
+User=$ME
+WorkingDirectory=$DIR
+ExecStart=/bin/sh -c 'exec ./pflib pi-auftrag.txt %i \$\$(cat .teile) ergebnis-%i.jsonl ergebnis-*.jsonl'
+Nice=19
+IOSchedulingClass=idle
+OOMScoreAdjust=1000
+Restart=on-failure
+RestartSec=120
+RestartPreventExitStatus=1
+StandardOutput=append:$DIR/log-%i.txt
+StandardError=append:$DIR/log-%i.txt
+
+[Install]
+WantedBy=multi-user.target" | sudo tee /etc/systemd/system/flops@.service > /dev/null || { echo "Ohne Passwort geht es nicht. Nochmal: sh pi-rechnen.sh"; exit 1; }
+  for u in $(instances); do sudo systemctl disable --now "$u" > /dev/null 2>&1; done
+  sudo systemctl daemon-reload
+  i=0
+  while [ $i -lt "$N" ]; do sudo systemctl enable --now "flops@$i" > /dev/null 2>&1 || { echo "Dienst flops@$i startet nicht: sudo systemctl status flops@$i"; exit 1; }; i=$((i + 1)); done
+  sleep 2
+  echo "$(pgrep -xc pflib) Rechnungen laufen als Dienst. Sie laufen weiter, wenn du die Verbindung schließt, und starten nach einem Neustart von selbst."
+  hint
+else
+  i=0
+  while [ $i -lt "$N" ]; do
+    nohup setsid sh -c 'echo 1000 > /proc/self/oom_score_adj 2>/dev/null; exec nice -n 19 ./pflib "$@"' pflib pi-auftrag.txt $i "$N" ergebnis-$i.jsonl ergebnis-*.jsonl >> log-$i.txt 2>&1 < /dev/null &
+    i=$((i + 1))
+  done
+  echo "$N Rechnungen gestartet (ohne Dienst: nach einem Neustart des Pi den Befehl nochmal ausführen)."
+fi
+echo "Stand ansehen: cd ~/flops && sh pi-rechnen.sh status"
