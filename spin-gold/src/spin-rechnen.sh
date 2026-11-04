@@ -16,10 +16,11 @@ DIR=$(pwd)
 
 if [ "$1" = "status" ]; then
   echo "Dienst: $(systemctl is-active spin-gold 2>/dev/null)"
-  echo "Fertige Lösungen: $(cat ergebnis.jsonl 2>/dev/null | wc -l)"
+  echo "Fertig: $(cat ergebnis.jsonl 2>/dev/null | wc -l) Preflop-Lösungen, $(cat cb-ergebnis.jsonl 2>/dev/null | wc -l) Flops"
   command -v vcgencmd > /dev/null && vcgencmd measure_temp 2>/dev/null
   free -h | head -2
   tail -n 3 log.txt 2>/dev/null
+  rm -f spin-ergebnis-*.txt 2>/dev/null   # old copies made for sending
   exit 0
 fi
 
@@ -30,10 +31,10 @@ if [ "$1" = "stopp" ]; then
 fi
 
 if [ "$1" = "senden" ]; then
-  [ -s ergebnis.jsonl ] || { echo "Noch keine Lösung fertig."; exit 0; }
-  out="spin-ergebnis-$(date +%Y%m%d-%H%M).txt"; cp ergebnis.jsonl "$out"
+  [ -s ergebnis.jsonl ] || [ -s cb-ergebnis.jsonl ] || { echo "Noch keine Lösung fertig."; exit 0; }
+  out="spin-ergebnis-$(date +%Y%m%d-%H%M).txt"; cat ergebnis.jsonl cb-ergebnis.jsonl > "$out" 2>/dev/null
   P=8731
-  echo "$(wc -l < "$out") Lösungen in $out"
+  echo "$(wc -l < "$out") Lösungen in $out ($(du -h "$out" | cut -f1))"
   echo "Im iPhone-Browser öffnen:"
   for ip in $(hostname -I); do case "$ip" in *:*) ;; 100.*) echo "   http://$ip:$P/$out   (Tailscale, geht auch unterwegs)";; *) echo "   http://$ip:$P/$out   (nur im gleichen WLAN)";; esac; done
   echo "Die Datei landet in „Downloads“. Hänge sie im Chat mit Claude an. Danach hier Strg+C drücken."

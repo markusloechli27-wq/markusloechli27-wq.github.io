@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-# Spin & Gold preflop solves on the Raspberry Pi for the poker review app.
-# Takes its task list from GitHub Pages (spin-auftrag.json), solves one stack combination after the other with mr2
-# and appends each result as one line to ergebnis.jsonl. Waits while there is no task list yet, and checks
-# for new tasks when everything is done, so new work arrives without a new command on the Pi.
-import json, subprocess, base64, os, time, urllib.request, hashlib
+# Spin & Gold on the Raspberry Pi for the poker review app.
+# Takes its work from GitHub Pages (spin-auftrag.json): preflop solves with mr2 (one stack combination each,
+# results in ergebnis.jsonl), then flop solves with cbet (one flop of one spot each, results in cb-ergebnis.jsonl).
+# Waits while there is nothing to do and checks for new work, so new tasks arrive without a new command on the Pi.
+# Updates itself: when the job names a newer version of this file, it downloads it and restarts (systemd restarts it).
+import json, subprocess, base64, os, sys, time, urllib.request, hashlib
 B = os.environ.get('SPIN_SRC', 'https://markusloechli27-wq.github.io/spin-gold/src/')
 D = os.path.dirname(os.path.abspath(__file__)); os.chdir(D)
 MODELS = ['cev', 'x10', 'x50', 'jp']
+sha = lambda b: hashlib.sha1(b).hexdigest()[:12]
 
 def log(*a): print(time.strftime('%d.%m. %H:%M'), *a, flush=True)
 def get(name):
     with urllib.request.urlopen(B + name + '?t=%d' % time.time(), timeout=120) as r: return r.read()
+def fetch(name, want):  # download a file and check that it is the version the job names (GitHub Pages caches for a while)
+    data = get(name)
+    if want and sha(data) != want: raise RuntimeError(name + ' noch nicht aktuell (Cache), nächster Versuch in 5 Minuten')
+    open(name, 'wb').write(data)
 
 def pack(nodes, keep):  # 4-bit frequencies of the displayed spots, same format as the app
     out = {}
@@ -22,43 +28,77 @@ def pack(nodes, keep):  # 4-bit frequencies of the displayed spots, same format 
         out[n['path']] = {'p': n['p'], 'acts': acts, 'rest': 'check' if 'check' in n['acts'] else 'fold', 'f': base64.b64encode(b).decode()}
     return out
 
-def done_keys():
+def keys(fn, f):
     s = set()
-    if os.path.exists('ergebnis.jsonl'):
-        for line in open('ergebnis.jsonl'):
-            try: o = json.loads(line); s.add((o['v'], o['m'], o['k']))
+    if os.path.exists(fn):
+        for line in open(fn):
+            try: s.add(f(json.loads(line)))
             except Exception: pass          # half-written last line after a power cut
     return s
+def mem_free_mb():
+    for l in open('/proc/meminfo'):
+        if l.startswith('MemAvailable'): return int(l.split()[1]) // 1024
+    return 0
 
-def prepare(job):  # program and calibration of this job version
+def prepare(job):  # programs and calibration of this job version
     if not os.path.exists('.mr2ver') or open('.mr2ver').read() != job['mr2']:
-        for f in ('mr2.c', 'pk.h', 'eq.bin', 'p3.bin'):
-            data = get(f)
-            if f == 'mr2.c' and hashlib.sha1(data).hexdigest()[:12] != job['mr2']: raise RuntimeError('mr2.c noch nicht aktuell (Cache)')
-            open(f, 'wb').write(data)
+        fetch('mr2.c', job['mr2']); fetch('pk.h', None); fetch('eq.bin', None); fetch('p3.bin', None)
         r = subprocess.run(['gcc', '-O3', '-march=native', '-fopenmp', '-o', 'mr2', 'mr2.c', '-lm'], capture_output=True, text=True)
         if r.returncode: raise RuntimeError('Kompilieren fehlgeschlagen: ' + r.stderr[-300:])
-        open('.mr2ver', 'w').write(job['mr2']); log('Programm', job['mr2'], 'bereit')
+        open('.mr2ver', 'w').write(job['mr2']); log('Preflop-Programm', job['mr2'], 'bereit')
     if not os.path.exists('.eqrver') or open('.eqrver').read() != job['v']:
-        open('eqr.txt', 'wb').write(get('spin-eqr.txt'))
-        if hashlib.sha1(open('eqr.txt', 'rb').read()).hexdigest()[:12] != job['eqr']: raise RuntimeError('eqr.txt noch nicht aktuell (Cache)')
-        open('.eqrver', 'w').write(job['v']); log('Eichung', job['v'], 'bereit')
+        data = get('spin-eqr.txt')
+        if sha(data) != job['eqr']: raise RuntimeError('eqr.txt noch nicht aktuell (Cache)')
+        open('eqr.txt', 'wb').write(data); open('.eqrver', 'w').write(job['v']); log('Eichung', job['v'], 'bereit')
+    cb = job.get('cb')
+    if cb and (not os.path.exists('.cbver') or open('.cbver').read() != cb['v']):
+        fetch('cbet.c', cb['cbet']); fetch('pfsolve.c', cb['pfsolve']); fetch('spin-cb-ranges.json', cb['ranges'])
+        r = subprocess.run(['gcc', '-O3', '-march=native', '-o', 'cbet', 'cbet.c', '-lm'], capture_output=True, text=True)
+        if r.returncode: raise RuntimeError('Kompilieren fehlgeschlagen: ' + r.stderr[-300:])
+        open('.cbver', 'w').write(cb['v']); log('Flop-Programm', cb['v'], 'bereit')
+
+def preflop(job, m, k):
+    t0 = time.time(); st = k.replace('|', ',')
+    r = subprocess.run(['./mr2', '3h', st.split(',')[0], str(job['iters']), '0'], capture_output=True, text=True,
+                       env=dict(os.environ, STACKS=st, MODEL=str(MODELS.index(m))))
+    if r.returncode: log('Fehler bei', m, k, r.stderr[-200:]); return False
+    ex = r.stderr.strip().split('\n')[-2].strip()
+    line = json.dumps({'v': job['v'], 'm': m, 'k': k, 'ex': ex, 'd': pack(json.loads(r.stdout)['nodes'], set(job['spots']))}, separators=(',', ':'))
+    with open('ergebnis.jsonl', 'a') as f: f.write(line + '\n')
+    done = len(keys('ergebnis.jsonl', lambda o: (o['v'], o['m'], o['k'])) & {(job['v'], a, b) for a, b in job['tasks']})
+    log('Preflop %s %s fertig in %.0f s (%d von %d)' % (m, k, time.time() - t0, done, len(job['tasks']))); return True
+
+def flop(cb, t):
+    sid, fl, pot, stack, env, mb = t
+    if mem_free_mb() < mb + 300: log('Warte auf Speicher für %s %s (%d MB nötig, %d frei)' % (sid, fl, mb + 300, mem_free_mb())); time.sleep(300); return False
+    t0 = time.time(); open('fl_one.txt', 'w').write(fl + ' 1\n')
+    r = subprocess.run(['./cbet', 'spin-cb-ranges.json', sid + '_oop', sid + '_ip', str(pot), str(stack), 'fl_one.txt', '1', '0', '1'], capture_output=True, text=True,
+                       env=dict(os.environ, PF_HEAP_MB=str(mb), **env))
+    if r.returncode or not r.stdout.strip(): log('Fehler bei', sid, fl, r.returncode, r.stderr[-200:]); time.sleep(60); return False
+    with open('cb-ergebnis.jsonl', 'a') as f: f.write(json.dumps({'v': cb['v'], 'sid': sid, 'r': json.loads(r.stdout)}, separators=(',', ':')) + '\n')
+    done = len(keys('cb-ergebnis.jsonl', lambda o: (o['v'], o['sid'], o['r']['flop'])) & {(cb['v'], a[0], a[1]) for a in cb['tasks']})
+    log('Flop %s %s fertig in %.0f s (%d von %d)' % (sid, fl, time.time() - t0, done, len(cb['tasks']))); return True
 
 while True:
     try: job = json.loads(get('spin-auftrag.json'))
     except Exception as e: log('Auftrag nicht erreichbar:', e); time.sleep(300); continue
-    if not job.get('tasks'): log('Warte auf Aufgaben:', job.get('info', '')); time.sleep(600); continue
+    if job.get('worker') and job['worker'] != sha(open(__file__, 'rb').read()):
+        try:
+            for f, w in (('spin-pi.py', job['worker']), ('spin-rechnen.sh', job.get('script'))): fetch(f, w)
+            log('Neue Version geladen, starte neu'); sys.exit(0)
+        except Exception as e: log(e); time.sleep(300); continue
+    if not job.get('tasks') and not job.get('cb'): log('Warte auf Aufgaben:', job.get('info', '')); time.sleep(600); continue
     try: prepare(job)
     except Exception as e: log(e); time.sleep(300); continue
-    v, done = job['v'], done_keys()
-    todo = [t for t in job['tasks'] if (v, t[0], t[1]) not in done]
-    if not todo: log('Alles fertig: %d Lösungen. Warte auf neue Aufgaben.' % len(job['tasks'])); time.sleep(1800); continue
-    for m, k in todo[:5]:                   # look at the task list again after a few solves
-        t0 = time.time(); st = k.replace('|', ',')
-        r = subprocess.run(['./mr2', '3h', st.split(',')[0], str(job['iters']), '0'], capture_output=True, text=True,
-                           env=dict(os.environ, STACKS=st, MODEL=str(MODELS.index(m))))
-        if r.returncode: log('Fehler bei', m, k, r.stderr[-200:]); time.sleep(60); break
-        ex = r.stderr.strip().split('\n')[-2].strip()
-        line = json.dumps({'v': v, 'm': m, 'k': k, 'ex': ex, 'd': pack(json.loads(r.stdout)['nodes'], set(job['spots']))}, separators=(',', ':'))
-        with open('ergebnis.jsonl', 'a') as f: f.write(line + '\n')
-        log('%s %s fertig in %.0f s (%d von %d)' % (m, k, time.time() - t0, len(done_keys() & {(v, a, b) for a, b in job['tasks']}), len(job['tasks'])))
+    v = job['v']; done = keys('ergebnis.jsonl', lambda o: (o['v'], o['m'], o['k']))
+    todo = [t for t in job.get('tasks', []) if (v, t[0], t[1]) not in done]
+    if todo:
+        for m, k in todo[:5]:               # look at the job again after a few solves
+            if not preflop(job, m, k): time.sleep(60); break
+        continue
+    cb = job.get('cb')
+    if cb:
+        cdone = keys('cb-ergebnis.jsonl', lambda o: (o['v'], o['sid'], o['r']['flop']))
+        ctodo = [t for t in cb['tasks'] if (cb['v'], t[0], t[1]) not in cdone]
+        if ctodo: flop(cb, ctodo[0]); continue
+    log('Alles fertig. Warte auf neue Aufgaben.'); time.sleep(1800)

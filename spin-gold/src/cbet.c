@@ -1,6 +1,8 @@
 // Min c-bet strategies for a minraised pot: OOP checks, IP checks / bets 1 BB / goes all-in, OOP answers fold / call / all-in.
 // Writes one JSON line per flop with per-class frequencies (0-100) for the IP c-bet node and the OOP node facing the min bet.
 // usage: ./cbet ranges.json key_oop key_ip pot stack flops.txt nflops part parts > out.jsonl
+// FULLTREE: flop sizes from IPSIZES (default "1bb,0.33,0.66"); OOPSIZES (e.g. "1bb,0.33,0.66") lets OOP bet first on the flop
+//   (OOP aggressor or limped pot): then the root is written as "lead" and IP facing each lead as "vsl<size>".
 #define NATIVE
 #include "pfsolve.c"
 #include <stdio.h>
@@ -22,6 +24,8 @@ static void b64(FILE *f, const unsigned char *p, size_t n) {
     fputc(B64[v >> 18 & 63], f); fputc(B64[v >> 12 & 63], f); fputc(i + 1 < n ? B64[v >> 6 & 63] : '=', f); fputc(i + 2 < n ? B64[v & 63] : '=', f); }
 }
 static const char *ANM[] = {"fold", "check", "call", "bet", "raise", "allin"};
+static int sizes(const char *s, float pot, float *out) { // "1bb,0.33,0.66" -> pot fractions
+  int n = 0; while (s && *s && n < 4) { char *e; float v = strtof(s, &e); if (e == s) break; s = e; if (*s == 'b') { v /= pot; while (*s == 'b') s++; } out[n++] = v; while (*s == ',' || *s == ' ') s++; } return n; }
 static const char *lab(int ci, float pot) { // bet sizes on the flop: 1 BB (min), 33 % or 66 % of the pot
   const Node *c = &NODES[ci]; if (c->acttype != A_BET) return ANM[c->acttype];
   if (fabsf(c->actamt - 1.0f) < 0.02f) return "bmin"; return c->actamt / pot < 0.5f ? "b33" : "b66";
@@ -55,9 +59,10 @@ int main(int argc, char **argv) {
     cfg[9] = 0; cfg[10] = 0; cfg[11] = 0.67f; cfg[12] = 4;
     float *s = cfg + 13;
     if (getenv("FULLTREE")) { // flop: IP min bet (1 BB), 33 %, 66 %; turn and river: 33 % and 66 % for both; raises go all-in
-      s[0] = 2; s[1] = 0; s[6] = 3; s[7] = 1.0f / pot; s[8] = 0.33f; s[9] = 0.66f; s[11] = 0;
-      s = cfg + 29; s[0] = 2; s[1] = 2; s[2] = 0.33f; s[3] = 0.66f; s[6] = 2; s[7] = 0.33f; s[8] = 0.66f; s[11] = 0;
-      s = cfg + 45; s[0] = 2; s[1] = 2; s[2] = 0.33f; s[3] = 0.66f; s[6] = 2; s[7] = 0.33f; s[8] = 0.66f; s[11] = 0;
+      s[0] = 2; s[1] = sizes(getenv("OOPSIZES"), pot, s + 2); s[6] = sizes(getenv("IPSIZES") ? getenv("IPSIZES") : "1bb,0.33,0.66", pot, s + 7); s[11] = 0;
+      const char *tr = getenv("TRSIZES") ? getenv("TRSIZES") : "0.33,0.66";   // turn and river, both players
+      s = cfg + 29; s[0] = 2; s[1] = sizes(tr, pot, s + 2); s[6] = sizes(tr, pot, s + 7); s[11] = 0;
+      s = cfg + 45; s[0] = 2; s[1] = sizes(tr, pot, s + 2); s[6] = sizes(tr, pot, s + 7); s[11] = 0;
     } else {
       s[0] = 2; s[1] = 0; s[6] = 1; s[7] = 1.0f / pot; s[11] = 0;
       s = cfg + 29; s[0] = 1; s[1] = 0; s[6] = 0; s[11] = 0;
@@ -73,6 +78,12 @@ int main(int argc, char **argv) {
     if (chk < 0 || NODES[chk].type != N_ACTION) { fprintf(stderr, "no check node %s\n", key); continue; }
     printf("{\"flop\":\"%s\",\"w\":%d,\"iters\":%d,\"expl\":%.2f,\"ev\":[%.3f,%.3f],", key, w, it, ex, pf_ev(0), pf_ev(1));
     node_out(stdout, "cbet", chk, W[1], NULL);
+    int leads = 0; for (int a = 0; a < NODES[root].nact; a++) leads += NODES[NODES[root].child + a].acttype == A_BET;
+    if (leads) { // OOP may bet first: its flop strategy and IP facing each bet size
+      printf(","); node_out(stdout, "lead", root, W[0], NULL);
+      for (int a = 0; a < NODES[root].nact; a++) { int c = NODES[root].child + a; if (NODES[c].acttype != A_BET || NODES[c].type != N_ACTION) continue;
+        char nm[16]; snprintf(nm, sizeof nm, "vsl%s", lab(c, P0) + 1); printf(","); node_out(stdout, nm, c, W[1], NULL); }
+    }
     { // OOP facing each flop bet size; his reach: range times his check frequency at the root
       float *st0 = pf_strategy(root); int H0 = NH[0], ci = -1; for (int a = 0; a < NODES[root].nact; a++) if (NODES[root].child + a == chk) ci = a;
       float *w0 = malloc(sizeof(float) * H0); for (int h = 0; h < H0; h++) w0[h] = W[0][h] * st0[ci * H0 + h];
