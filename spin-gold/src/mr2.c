@@ -92,7 +92,9 @@ static void hand_factors(void) {
 }
 // calibrated realization (from real flop solves, see pf/calib.c): per class, for raised pots (IP aggressor / OOP caller)
 // and limped pots (IP / OOP), measured at SPR 2.9 and 7; other roles use the geometric mean, other SPRs scale the log
-static double RIPA[NC], ROOPC[NC], RIPL[NC], ROOPL[NC]; static int HAVE_EQR = 0;
+// limped pots depend on who limped: lines 3/4 = limper in position vs BB out of position (heads-up, BTN limp),
+// lines 5/6 (optional) = BB in position vs the SB limper out of position (3-handed after a BTN fold)
+static double RIPA[NC], ROOPC[NC], RIPL[NC], ROOPL[NC], RIPLB[NC], ROOPLB[NC]; static int HAVE_EQR = 0, HAVE_LB = 0;
 static const double SPR_R = 13.0 / 4.5, SPR_L = 7.0;
 static double realize(const Node *t, int p, int h) { // factor for player p holding class h at a flop terminal
   double xs[3]; int na = 0; for (int q = 0; q < NPL; q++) if (t->active[q]) xs[na++] = X[q];
@@ -102,6 +104,7 @@ static double realize(const Node *t, int p, int h) { // factor for player p hold
   if (HAVE_EQR) {
     int raised = t->cur >= 2 - 1e-9, aggr = p == t->aggr; double b;
     if (raised) b = p == last ? (aggr ? RIPA[h] : sqrt(RIPA[h] * ROOPC[h])) : p == first ? (aggr ? sqrt(RIPA[h] * ROOPC[h]) : ROOPC[h]) : sqrt(RIPA[h] * ROOPC[h]);
+    else if (HAVE_LB && last == NPL - 1) b = p == last ? RIPLB[h] : p == first ? ROOPLB[h] : sqrt(RIPLB[h] * ROOPLB[h]);
     else b = p == last ? RIPL[h] : p == first ? ROOPL[h] : sqrt(RIPL[h] * ROOPL[h]);
     double k = sqrt(spr / (raised ? SPR_R : SPR_L)); k = fmin(1.6, fmax(0.5, k));
     return exp(log(b) * k);
@@ -114,7 +117,9 @@ static double realize(const Node *t, int p, int h) { // factor for player p hold
 static void load_eqr(void) {
   FILE *f = fopen("eqr.txt", "r"); if (!f) return; double *T[4] = {RIPA, ROOPC, RIPL, ROOPL};
   for (int k = 0; k < 4; k++) for (int h = 0; h < NC; h++) if (fscanf(f, "%lf", &T[k][h]) != 1) { fclose(f); return; }
-  fclose(f); HAVE_EQR = 1; fprintf(stderr, "calibrated realization loaded\n");
+  HAVE_EQR = 1; HAVE_LB = 1;
+  for (int k = 0; k < 2 && HAVE_LB; k++) for (int h = 0; h < NC; h++) if (fscanf(f, "%lf", k ? &ROOPLB[h] : &RIPLB[h]) != 1) { HAVE_LB = 0; break; }
+  fclose(f); fprintf(stderr, "calibrated realization loaded%s\n", HAVE_LB ? " (limped pots by limper)" : "");
 }
 
 // ---- CFR ----
