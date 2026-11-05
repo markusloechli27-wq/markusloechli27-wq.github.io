@@ -20,4 +20,5 @@ jobs:
           $d = Join-Path $env:RUNNER_TEMP 'SpinRechner'
           powershell -NoProfile -ExecutionPolicy Bypass -File "$d\spin-pc.ps1" -Max 1 -Kerne 2 -NurFlops
           Get-Content "$d\log.txt" -Tail 4
+          Get-Content "$d\ergebnis-pc.jsonl" | Select-Object -Last 1 | ForEach-Object { $_.Substring(0, [Math]::Min(300, $_.Length)) }
           python -c "import json,sys; L=[json.loads(l) for l in open(sys.argv[1], encoding='utf-8')]; f=[o for o in L if 'sid' in o]; print(len(f), 'flops', [(o['sid'], o['r']['flop'], o['r'].get('expl')) for o in f])" "$d\ergebnis-pc.jsonl"
