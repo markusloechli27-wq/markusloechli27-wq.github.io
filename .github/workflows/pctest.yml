@@ -11,9 +11,9 @@ jobs:
         run: |
           $d = Join-Path $env:RUNNER_TEMP 'SpinRechner'; New-Item -ItemType Directory -Force $d | Out-Null
           Invoke-WebRequest -UseBasicParsing "https://markusloechli27-wq.github.io/spin-gold/pc/spin-pc.ps1?t=$(Get-Date -UFormat %s)" -OutFile "$d\spin-pc.ps1"
-          powershell -NoProfile -ExecutionPolicy Bypass -File "$d\spin-pc.ps1" -Max 3 -Kerne 2
+          powershell -NoProfile -ExecutionPolicy Bypass -File "$d\spin-pc.ps1" -Max 9 -Kerne 2
           Get-Content "$d\log.txt"
-          python -c "import json,sys; L=[json.loads(l) for l in open(sys.argv[1], encoding='utf-8')]; print(len(L), 'lines'); [print(o['v'], o.get('m'), o.get('k'), 'base' if 'd' in o else 'patch', len(o.get('d') or o.get('pd') or {}), 'nodes', sum(1 for n in (o.get('pd') or {}).values() if 'lk' in n), 'with lk', o.get('ex', '')) for o in L]; P=[o for o in L if 'pd' in o]; assert P[0]['pd'] != P[2]['pd'], 'stacks did not reach the program'" "$d\ergebnis-pc-v2.jsonl"
+          python -c "import json,sys; L=[json.loads(l) for l in open(sys.argv[1], encoding='utf-8')]; print(len(L), 'lines'); [print(o['v'], o.get('m'), o.get('k'), 'base' if 'd' in o else 'patch', len(o.get('d') or o.get('pd') or {}), 'nodes', sum(1 for n in (o.get('pd') or {}).values() if 'lk' in n), 'with lk', o.get('ex', '')) for o in L]; P={o['k']: o['pd'] for o in L if 'pd' in o}; assert P['5|5|5'] != P['5|7.5|7.5'], 'stacks did not reach the program'; print('5|5|5 and 5|7.5|7.5 differ: ok')" "$d\ergebnis-pc-v2.jsonl"
       - name: Flop
         shell: powershell
         run: |
