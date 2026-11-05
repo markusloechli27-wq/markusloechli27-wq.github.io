@@ -91,6 +91,20 @@ int main(int argc, char **argv) {
         char nm[16]; snprintf(nm, sizeof nm, "vs%s", lab(bet, P0)); printf(","); node_out(stdout, nm, bet, w0, NULL); }
       free(w0);
     }
+    { // realized pot share per hand class and player (as pf/calib.c), so every flop solve also calibrates the preflop solver
+      double sh[2][169] = {{0}}, wt[2][169] = {{0}};
+      for (int trav = 0; trav < 2; trav++) {
+        SCR_TOP = 0; float *out = scr(NH[trav]); walk(0, trav, W[1 - trav], out, 2);
+        int o = 1 - trav; float cs[52], tot; card_sums(W[o], o, cs, &tot);
+        for (int h = 0; h < NH[trav]; h++) { int sm = SAME[trav][h]; double c = tot - cs[HC[trav][2 * h]] - cs[HC[trav][2 * h + 1]] + (sm >= 0 ? W[o][sm] : 0);
+          if (c <= 0 || W[trav][h] <= 0) continue; int cl = class_of(HC[trav][2 * h], HC[trav][2 * h + 1]); sh[trav][cl] += W[trav][h] * (out[h] / c) / P0; wt[trav][cl] += W[trav][h]; }
+      }
+      printf(",\"share\":[");
+      for (int p = 0; p < 2; p++) { printf("%s[", p ? "," : ""); for (int c = 0; c < 169; c++) printf("%s%.4f", c ? "," : "", wt[p][c] > 0 ? sh[p][c] / wt[p][c] : -1); printf("]"); }
+      printf("],\"wt\":[");
+      for (int p = 0; p < 2; p++) { printf("%s[", p ? "," : ""); for (int c = 0; c < 169; c++) printf("%s%.3f", c ? "," : "", wt[p][c]); printf("]"); }
+      printf("]");
+    }
     printf("}\n"); fflush(stdout); done++;
     fprintf(stderr, "%s it %d expl %.2f%%\n", key, it, ex); fflush(stderr);
   }

@@ -51,11 +51,12 @@ def prepare(job):  # programs and calibration of this job version
         if sha(data) != job['eqr']: raise RuntimeError('eqr.txt noch nicht aktuell (Cache)')
         open('eqr.txt', 'wb').write(data); open('.eqrver', 'w').write(job['v']); log('Eichung', job['v'], 'bereit')
     cb = job.get('cb')
-    if cb and (not os.path.exists('.cbver') or open('.cbver').read() != cb['v']):
+    cbkey = cb and '|'.join((cb['v'], cb.get('cbet', ''), cb.get('pfsolve', '')))   # a faster program with the same results keeps cb['v']
+    if cb and (not os.path.exists('.cbver') or open('.cbver').read() != cbkey):
         fetch('cbet.c', cb['cbet']); fetch('pfsolve.c', cb['pfsolve']); fetch('spin-cb-ranges.json', cb['ranges'])
         r = subprocess.run(['gcc', '-O3', '-march=native', '-o', 'cbet', 'cbet.c', '-lm'], capture_output=True, text=True)
         if r.returncode: raise RuntimeError('Kompilieren fehlgeschlagen: ' + r.stderr[-300:])
-        open('.cbver', 'w').write(cb['v']); log('Flop-Programm', cb['v'], 'bereit')
+        open('.cbver', 'w').write(cbkey); log('Flop-Programm', cb['v'], cb.get('pfsolve', ''), 'bereit')
 
 def preflop(job, m, k):
     t0 = time.time(); st = k.replace('|', ',')

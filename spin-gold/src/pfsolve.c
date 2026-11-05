@@ -92,6 +92,39 @@ static float *scr(size_t n) { float *p = SCRATCH + SCR_TOP; SCR_TOP += (n + 3) &
 typedef struct { int street, player, nbets, checked; float b[2], c[2]; uint8_t board[5]; int nb; } St;
 static int combo_index(int a, int b) { if (a > b) { int t = a; a = b; b = t; } return b * (b - 1) / 2 + a; }
 static int on_board(const uint8_t *bd, int nb, int c) { for (int i = 0; i < nb; i++) if (bd[i] == c) return 1; return 0; }
+
+// ---------------- suit symmetry (native builds with PF_ISO=1) ----------------
+// A turn or river card that is the image of another under a suit permutation fixing the board and both ranges leads to
+// the same subtree up to relabelling the suits. Only the smallest card of each such orbit is built and solved; the
+// others take its values through the matching hand permutation. Same result, less time and memory.
+// Walks must start at the root (the dealt cards are tracked on the way down).
+static int ISO = 0; static uint8_t PERM[24][4], PINV[24]; static int G0[24], NG0 = 1; static int32_t *HPERM[2][24];
+static uint8_t DEALT[4]; static int NDEALT;
+static float *CFG, *WIN;
+static int pcard(int g, int c) { return (c & ~3) | PERM[g][c & 3]; }
+static void iso_group(void) {
+  int n = 0;
+  for (int a = 0; a < 4; a++) for (int b = 0; b < 4; b++) for (int c = 0; c < 4; c++) for (int d = 0; d < 4; d++) {
+    if (a == b || a == c || a == d || b == c || b == d || c == d) continue;
+    PERM[n][0] = (uint8_t)a; PERM[n][1] = (uint8_t)b; PERM[n][2] = (uint8_t)c; PERM[n][3] = (uint8_t)d; n++; }   // PERM[0] = identity
+  for (int i = 0; i < 24; i++) for (int j = 0; j < 24; j++) { int ok = 1; for (int s = 0; s < 4; s++) if (PERM[j][PERM[i][s]] != s) ok = 0; if (ok) PINV[i] = (uint8_t)j; }
+#ifdef NATIVE
+  ISO = getenv("PF_ISO") && atoi(getenv("PF_ISO")) > 0;
+#endif
+  G0[0] = 0; NG0 = 1; if (!ISO) return;
+  for (int g = 1; g < 24; g++) {
+    int ok = 1;
+    for (int i = 0; i < NB0 && ok; i++) if (!on_board(BOARD0, NB0, pcard(g, BOARD0[i]))) ok = 0;
+    for (int p = 0; p < 2 && ok; p++) for (int b = 1; b < 52 && ok; b++) for (int a = 0; a < b; a++)
+      if (WIN[p * 1326 + combo_index(a, b)] != WIN[p * 1326 + combo_index(pcard(g, a), pcard(g, b))]) { ok = 0; break; }
+    if (ok) G0[NG0++] = g;
+  }
+}
+static int cur_group(const uint8_t *dealt, int nd, int *gl) { // the permutations of G0 that also fix every card dealt so far
+  int n = 0; for (int i = 0; i < NG0; i++) { int g = G0[i], ok = 1; for (int k = 0; k < nd; k++) if (pcard(g, dealt[k]) != dealt[k]) ok = 0; if (ok) gl[n++] = g; }
+  return n;
+}
+static int is_rep(int c, const int *gl, int ng) { for (int i = 0; i < ng; i++) if (pcard(gl[i], c) < c) return 0; return 1; }
 static float pot_of(const St *s) { return P0 + s->c[0] + s->c[1] + s->b[0] + s->b[1]; }
 static float stack_left(const St *s, int p) { return STK - s->c[p] - s->b[p]; }
 static int table_for(const uint8_t *bd) {
@@ -107,8 +140,8 @@ static void set_term(int ni, int type, int player, const St *s) {
 static void end_street(int ni, St s) {
   s.c[0] += s.b[0]; s.c[1] += s.b[1]; s.b[0] = s.b[1] = 0;
   if (s.street == 2) { set_term(ni, N_SHOW, 0, &s); int id = table_for(s.board); if (PASS == 1) NODES[ni].data = id; return; }
-  int ncard = 0; uint8_t cards[52];
-  for (int c = 0; c < 52; c++) if (!on_board(s.board, s.nb, c)) cards[ncard++] = (uint8_t)c;
+  int ncard = 0; uint8_t cards[52]; int gl[24], ng = cur_group(s.board + NB0, s.nb - NB0, gl);
+  for (int c = 0; c < 52; c++) if (!on_board(s.board, s.nb, c) && is_rep(c, gl, ng)) cards[ncard++] = (uint8_t)c;
   int first = NN; NN += ncard;
   if (PASS == 1) { Node *n = &NODES[ni]; n->type = N_CHANCE; n->player = 0; n->nact = 0; n->child = first; n->c0 = s.c[0]; n->c1 = s.c[1]; n->street = (int16_t)s.street; n->data = ncard; }
   for (int k = 0; k < ncard; k++) {
@@ -176,7 +209,6 @@ static void build(int ni, St s) {
 // cfg (floats): [0] pot, [1] stack, [2] start street, [3] nboard, [4..8] board, [9] rake rate, [10] rake cap,
 // [11] all-in threshold, [12] add-all-in ratio; per street s (16 floats from 13+16s):
 // maxbets, n_oop, oop[4], n_ip, ip[4], n_raise, raise[4]
-static float *CFG, *WIN;
 EXPORT("pf_cfg_ptr") float *pf_cfg_ptr(void) { if (!CFG) CFG = xalloc(sizeof(float) * 64); return CFG; }
 EXPORT("pf_win_ptr") float *pf_win_ptr(void) { if (!WIN) WIN = xalloc(sizeof(float) * 2 * 1326); return WIN; }
 static void read_cfg(void) {
@@ -210,11 +242,17 @@ static int make_hands(void) {
     for (int h = 0; h < NH[p]; h++) SAME[p][h] = pos[combo_index(HC[p][2 * h], HC[p][2 * h + 1])];
   }
   HMAX = NH[0] > NH[1] ? NH[0] : NH[1];
+  for (int p = 0; p < 2; p++) { // hand index -> index of its image under each symmetry
+    for (int i = 0; i < 1326; i++) pos[i] = -1;
+    for (int h = 0; h < NH[p]; h++) pos[combo_index(HC[p][2 * h], HC[p][2 * h + 1])] = h;
+    for (int i = 1; i < NG0; i++) { int g = G0[i]; HPERM[p][g] = xalloc(sizeof(int32_t) * NH[p] + 16); if (!HPERM[p][g]) return -1;
+      for (int h = 0; h < NH[p]; h++) { int32_t x = pos[combo_index(pcard(g, HC[p][2 * h]), pcard(g, HC[p][2 * h + 1]))]; if (x < 0) return -1; HPERM[p][g][h] = x; } }
+  }
   return 0;
 }
 static double EST_BYTES; static int EST_NODES;
 EXPORT("pf_estimate") double pf_estimate(void) {
-  read_cfg();
+  read_cfg(); iso_group();
   for (int p = 0; p < 2; p++) { int n = 0; for (int b = 1; b < 52; b++) for (int a = 0; a < b; a++) n += valid_combo(p, a, b); NH[p] = n; }
   count_tree(); EST_NODES = NN;
   EST_BYTES = (double)NN * (sizeof(Node) + 8) + (double)NF * 2 + (double)NTBL * (NH[0] + NH[1]) * 8 + 8e6;
@@ -226,7 +264,7 @@ EXPORT("pf_reset") void pf_reset(void) { heap_reset(); CFG = 0; WIN = 0; NODES =
 static int ITER; static float *QBUF; static size_t QCAP; static float *REACHBUF, *VALBUF; static size_t VALCAP;
 EXPORT("pf_setup") int pf_setup(void) {
   QBUF = 0; QCAP = 0; REACHBUF = 0; VALBUF = 0; VALCAP = 0;
-  read_cfg();
+  read_cfg(); iso_group(); NDEALT = 0;
   if (make_hands()) return -1;
   count_tree(); NNODES = NN; NFLOATS = NF;
   NODES = xalloc(sizeof(Node) * (size_t)NNODES); if (!NODES) return -2;
@@ -328,11 +366,18 @@ static void walk(int ni, int trav, const float *reach, float *out, int mode) {
     int nc = n->data; float *r2 = scr(Ho), *tmp = scr(Ht);
     for (int h = 0; h < Ht; h++) out[h] = 0;
     float f = 1.f / (float)(52 - (3 + n->street) - 4);
+    int gl[24], ng = NG0 > 1 ? cur_group(DEALT, NDEALT, gl) : 1;
     for (int k = 0; k < nc; k++) {
       int ci = n->child + k, c = NODES[ci].card;
       for (int g = 0; g < Ho; g++) r2[g] = (HC[o][2 * g] == c || HC[o][2 * g + 1] == c) ? 0 : reach[g];
-      walk(ci, trav, r2, tmp, mode);
+      DEALT[NDEALT++] = (uint8_t)c; walk(ci, trav, r2, tmp, mode); NDEALT--;
       for (int h = 0; h < Ht; h++) if (HC[trav][2 * h] != c && HC[trav][2 * h + 1] != c) out[h] += tmp[h];
+      uint64_t seen = 1ull << c;
+      for (int i = 1; i < ng; i++) { // the other cards of this card's orbit: value of hand h = value of its preimage under the rep's subtree
+        int g = gl[i], c2 = pcard(g, c); if (seen >> c2 & 1) continue; seen |= 1ull << c2;
+        const int32_t *hp = HPERM[trav][PINV[g]];
+        for (int h = 0; h < Ht; h++) if (HC[trav][2 * h] != c2 && HC[trav][2 * h + 1] != c2) out[h] += tmp[hp[h]];
+      }
     }
     for (int h = 0; h < Ht; h++) out[h] *= f;
     SCR_TOP = mark; return;
