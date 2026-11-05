@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # Spin & Gold on the Raspberry Pi for the poker review app.
 # Takes its work from GitHub Pages (spin-auftrag.json): preflop solves with mr2 (one stack combination each,
-# results in ergebnis.jsonl), then flop solves with cbet (one flop of one spot each, results in cb-ergebnis.jsonl).
+# results in ergebnis.jsonl), then flop solves with cbet (one flop of one spot each, results in cb-ergebnis.jsonl),
+# then the less urgent preflop solves in 'late' (finer ChipEV grid, payout models with prizes for 2nd and 3rd).
 # Waits while there is nothing to do and checks for new work, so new tasks arrive without a new command on the Pi.
 # Updates itself: when the job names a newer version of this file, it downloads it and restarts (systemd restarts it).
 import json, subprocess, base64, os, sys, time, urllib.request, hashlib
@@ -66,8 +67,9 @@ def preflop(job, m, k):
     ex = r.stderr.strip().split('\n')[-2].strip()
     line = json.dumps({'v': job['v'], 'm': m, 'k': k, 'ex': ex, 'd': pack(json.loads(r.stdout)['nodes'], set(job['spots']))}, separators=(',', ':'))
     with open('ergebnis.jsonl', 'a') as f: f.write(line + '\n')
-    done = len(keys('ergebnis.jsonl', lambda o: (o['v'], o['m'], o['k'])) & {(job['v'], a, b) for a, b in job['tasks']})
-    log('Preflop %s %s fertig in %.0f s (%d von %d)' % (m, k, time.time() - t0, done, len(job['tasks']))); return True
+    allt = job['tasks'] + job.get('late', [])
+    done = len(keys('ergebnis.jsonl', lambda o: (o['v'], o['m'], o['k'])) & {(job['v'], a, b) for a, b in allt})
+    log('Preflop %s %s fertig in %.0f s (%d von %d)' % (m, k, time.time() - t0, done, len(allt))); return True
 
 def flop(cb, t):
     sid, fl, pot, stack, env, mb = t
@@ -88,7 +90,7 @@ while True:
             for f, w in (('spin-pi.py', job['worker']), ('spin-rechnen.sh', job.get('script'))): fetch(f, w)
             log('Neue Version geladen, starte neu'); sys.exit(0)
         except Exception as e: log(e); time.sleep(300); continue
-    if not job.get('tasks') and not job.get('cb'): log('Warte auf Aufgaben:', job.get('info', '')); time.sleep(600); continue
+    if not job.get('tasks') and not job.get('cb') and not job.get('late'): log('Warte auf Aufgaben:', job.get('info', '')); time.sleep(600); continue
     try: prepare(job)
     except Exception as e: log(e); time.sleep(300); continue
     v = job['v']; done = keys('ergebnis.jsonl', lambda o: (o['v'], o['m'], o['k']))
@@ -102,4 +104,9 @@ while True:
         cdone = keys('cb-ergebnis.jsonl', lambda o: (o['v'], o['sid'], o['r']['flop']))
         ctodo = [t for t in cb['tasks'] if (cb['v'], t[0], t[1]) not in cdone]
         if ctodo: flop(cb, ctodo[0]); continue
+    late = [t for t in job.get('late', []) if (v, t[0], t[1]) not in done]   # after the flops
+    if late:
+        for m, k in late[:5]:
+            if not preflop(job, m, k): time.sleep(60); break
+        continue
     log('Alles fertig. Warte auf neue Aufgaben.'); time.sleep(1800)
