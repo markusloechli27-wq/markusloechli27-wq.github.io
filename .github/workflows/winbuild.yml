@@ -24,8 +24,10 @@ jobs:
           cd spin-gold/src
           mkdir -p ../pc/bin
           gcc --version | head -1
+          # single-threaded: the PC runs one solve per core; omp_get_wtime from a small stand-in header
+          mkdir -p /tmp/shim && printf '#include <time.h>\nstatic inline double omp_get_wtime(void) { return (double)clock() / CLOCKS_PER_SEC; }\n' > /tmp/shim/omp.h
           for a in x86-64-v2 x86-64-v3; do
-            gcc -O3 -march=$a -fopenmp -static -o ../pc/bin/mr2-$a.exe mr2.c -lm
+            gcc -O3 -march=$a -I/tmp/shim -Wno-unknown-pragmas -static -o ../pc/bin/mr2-$a.exe mr2.c -lm
             gcc -O3 -march=$a -static -o ../pc/bin/cbet-$a.exe cbet.c -lm
           done
           ls -la ../pc/bin
