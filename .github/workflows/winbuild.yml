@@ -1,0 +1,49 @@
+# Windows programs for the PC worker (spin-gold/pc): the preflop solver mr2 and the flop solver cbet,
+# built with MinGW for two CPU levels (x86-64-v3 with AVX2 for newer CPUs, x86-64-v2 for older ones), tested, committed.
+name: Windows-Programme
+on:
+  push:
+    paths: ['spin-gold/src/mr2.c', 'spin-gold/src/cbet.c', 'spin-gold/src/pfsolve.c', 'spin-gold/src/pk.h', '.github/workflows/winbuild.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc
+      - name: Build
+        run: |
+          cd spin-gold/src
+          mkdir -p ../pc/bin
+          gcc --version | head -1
+          for a in x86-64-v2 x86-64-v3; do
+            gcc -O3 -march=$a -fopenmp -static -o ../pc/bin/mr2-$a.exe mr2.c -lm
+            gcc -O3 -march=$a -static -o ../pc/bin/cbet-$a.exe cbet.c -lm
+          done
+          ls -la ../pc/bin
+          sha1sum mr2.c cbet.c pfsolve.c > ../pc/bin/quellen.txt
+      - name: Test
+        run: |
+          cd spin-gold/src
+          cp spin-eqr.txt eqr.txt
+          ../pc/bin/mr2-x86-64-v2.exe hu 15 50 0 > hu.json && head -c 120 hu.json && echo
+          OMP_NUM_THREADS=1 STACKS=10,10,10 PATCH=1 ../pc/bin/mr2-x86-64-v2.exe 3h 10 20 0 > h3.json && head -c 120 h3.json && echo
+          echo "Ac7d2h 1" > fl.txt
+          ESTIMATE=1 PF_ISO=1 FULLTREE=1 ../pc/bin/cbet-x86-64-v2.exe spin-cb-ranges.json 3h_btn_10_oop 3h_btn_10_ip 4.5 8 fl.txt 1 0 1
+          MAXIT=2 PF_ISO=1 FULLTREE=1 PF_HEAP_MB=1500 ../pc/bin/cbet-x86-64-v2.exe spin-cb-ranges.json 3h_btn_10_oop 3h_btn_10_ip 4.5 8 fl.txt 1 0 1 | head -c 120 && echo
+          rm -f eqr.txt hu.json h3.json fl.txt
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add spin-gold/pc/bin
+          git commit -m "Windows-Programme gebaut" || echo "nichts Neues"
+          git pull --rebase && git push
