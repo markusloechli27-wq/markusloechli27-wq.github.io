@@ -137,7 +137,7 @@ function Fertig($r) {
   $t = $r.t; $ok = $r.p.ExitCode -eq 0 -and (Test-Path $r.o) -and (Get-Item $r.o).Length -gt 0
   if (-not $ok) { Log "Fehler bei $($t.name) (Code $($r.p.ExitCode)): $((Get-Content $r.e -Tail 2 -ErrorAction SilentlyContinue) -join ' ')"; $script:fails[$t.key] = 1 + [int]$script:fails[$t.key] }
   elseif ($t.kind -eq 'pre') {
-    $js = [IO.File]::ReadAllText($r.o) | ConvertFrom-Json; $ex = [string](@(Get-Content $r.e) | Where-Object { $_ -match 'exploitability' } | Select-Object -Last 1); $ex = $ex.Trim()
+    $js = [IO.File]::ReadAllText($r.o) | ConvertFrom-Json; $ex = ''; foreach ($l in @(Get-Content $r.e)) { if ([string]$l -match 'exploitability') { $ex = ([string]$l).Trim() } }
     $lines = (J ([ordered]@{ v = $job.v; m = $t.m; k = $t.k; ex = $ex; d = (Pack $js.nodes $keep $false) })) + "`n" + (J ([ordered]@{ v = $job.vp; m = $t.m; k = $t.k; pd = (Pack $js.nodes $keep $true) }))
     [IO.File]::AppendAllText($OUT, $lines + "`n", $UTF8)
     [void]$done.Add("$($job.v)|$($t.m)|$($t.k)"); [void]$done.Add("$($job.vp)|$($t.m)|$($t.k)")
