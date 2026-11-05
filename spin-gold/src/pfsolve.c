@@ -69,7 +69,7 @@ enum { N_ACTION = 0, N_CHANCE = 1, N_FOLD = 2, N_SHOW = 3 };
 typedef struct {
   uint8_t type, player, nact, acttype; // player: actor (action) / folder (fold)
   int32_t child;  // first child (children are contiguous)
-  int32_t data;   // action: float offset into ARENA; showdown: table id; chance: number of cards
+  uint32_t data;  // action: offset into ARENA (unsigned: big 25 BB trees pass 2^31 entries); showdown: table id; chance: number of cards
   float actamt;   // bet total on this street after the action that led here
   float c0, c1;   // chips put in by OOP / IP since the start of the solve (incl. current street)
   int16_t card;   // card dealt by the parent chance node, -1 otherwise
@@ -192,7 +192,7 @@ static void build(int ni, St s) {
   Act acts[16]; int na = gen_actions(&s, acts), p = s.player;
   int first = NN; NN += na;
   size_t off = NF; NF += (size_t)2 * na * NH[p];
-  if (PASS == 1) { Node *n = &NODES[ni]; n->type = N_ACTION; n->player = (uint8_t)p; n->nact = (uint8_t)na; n->child = first; n->data = (int32_t)off; n->c0 = s.c[0] + s.b[0]; n->c1 = s.c[1] + s.b[1]; n->street = (int16_t)s.street; }
+  if (PASS == 1) { Node *n = &NODES[ni]; n->type = N_ACTION; n->player = (uint8_t)p; n->nact = (uint8_t)na; n->child = first; n->data = (uint32_t)off; n->c0 = s.c[0] + s.b[0]; n->c1 = s.c[1] + s.b[1]; n->street = (int16_t)s.street; }
   for (int k = 0; k < na; k++) {
     int ci = first + k; St t = s; Act a = acts[k];
     if (PASS == 1) { NODES[ci].acttype = (uint8_t)a.type; NODES[ci].actamt = a.amt; NODES[ci].card = -1; }
@@ -267,6 +267,7 @@ EXPORT("pf_setup") int pf_setup(void) {
   read_cfg(); iso_group(); NDEALT = 0;
   if (make_hands()) return -1;
   count_tree(); NNODES = NN; NFLOATS = NF;
+  if (NFLOATS > 0xFFFFFFF0u) return -7;   // offsets are 32-bit
   NODES = xalloc(sizeof(Node) * (size_t)NNODES); if (!NODES) return -2;
   ARENA = xalloc(sizeof(int16_t) * NFLOATS + 16); if (!ARENA) return -3;
   memset(ARENA, 0, sizeof(int16_t) * NFLOATS);
