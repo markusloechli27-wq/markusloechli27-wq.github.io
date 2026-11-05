@@ -142,7 +142,9 @@ function Fertig($r) {
     [IO.File]::AppendAllText($OUT, $lines + "`n", $UTF8)
     [void]$done.Add("$($job.v)|$($t.m)|$($t.k)"); [void]$done.Add("$($job.vp)|$($t.m)|$($t.k)")
   } else {
-    [IO.File]::AppendAllText($OUT, '{"v":"' + $job.cb.v + '","sid":"' + $t.sid + '","r":' + ([IO.File]::ReadAllText($r.o).Trim()) + "}`n", $UTF8)
+    $txt = [IO.File]::ReadAllText($r.o).Trim()
+    try { $null = $txt | ConvertFrom-Json } catch { Log "Ungültiges Ergebnis bei $($t.name): $($txt.Substring(0, [Math]::Min(160, $txt.Length)))"; $script:fails[$t.key] = 1 + [int]$script:fails[$t.key]; Remove-Item $r.o, $r.e -ErrorAction SilentlyContinue; return }
+    [IO.File]::AppendAllText($OUT, '{"v":"' + $job.cb.v + '","sid":"' + $t.sid + '","r":' + $txt + "}`n", $UTF8)
     [void]$done.Add("$($job.cb.v)|$($t.sid)|$($t.fl)")
   }
   if ($ok -and $Max -gt 0 -and $script:nDone + 1 -ge $Max) { $script:nDone++; AllesStoppen; Log "Test fertig: $($script:nDone) Ergebnisse."; exit 0 }
@@ -159,10 +161,12 @@ while ($true) {
     try { Vorbereiten } catch { Log $_.Exception.Message; Start-Sleep 300; continue }
     $keep = New-Object 'System.Collections.Generic.HashSet[string]'; foreach ($s in $job.spots) { [void]$keep.Add([string]$s) }
     $todo.Clear()
-    for ($i = 0; $i -lt $job.pre.Count -and -not $NurFlops; $i++) { $m = $job.pre[$i][0]; $k = $job.pre[$i][1]; $ver = $job.prever[$i]
-      if (-not $done.Contains("$ver|$m|$k") -and [int]$fails["pre|$m|$k"] -lt 2) { [void]$todo.Add(@{ kind = 'pre'; m = $m; k = $k; mi = $MODELS.IndexOf($m); mb = 300; name = "Preflop $m $k"; key = "pre|$m|$k" }) } }
+    function AddPre($lst, $vers) { for ($i = 0; $i -lt @($lst).Count -and -not $NurFlops; $i++) { $m = $lst[$i][0]; $k = $lst[$i][1]; $ver = $vers[$i]
+      if (-not $done.Contains("$ver|$m|$k") -and [int]$fails["pre|$m|$k"] -lt 2) { [void]$todo.Add(@{ kind = 'pre'; m = $m; k = $k; mi = $MODELS.IndexOf($m); mb = 300; name = "Preflop $m $k"; key = "pre|$m|$k" }) } } }
+    AddPre $job.pre $job.prever   # ChipEV preflop, then the flops, then the payout models (x10, jackpot, x50) last
     if ($job.cb) { foreach ($c in $job.cb.tasks) { if (-not $done.Contains("$($job.cb.v)|$($c[0])|$($c[1])") -and [int]$fails["cb|$($c[0])|$($c[1])"] -lt 2) {
       [void]$todo.Add(@{ kind = 'cb'; sid = $c[0]; fl = $c[1]; pot = $c[2]; stack = $c[3]; env = $c[4]; mb = [int]$c[5]; name = "Flop $($c[0]) $($c[1])"; key = "cb|$($c[0])|$($c[1])" }) } } }
+    if ($job.pre_late) { AddPre $job.pre_late $job.prever_late }
     Log "Auftrag: $($todo.Count) Aufgaben offen."
     if ($todo.Count -eq 0) { Log 'Alles fertig. Ergebnis mit Ergebnis-einpacken.bat einpacken und an Claude schicken.'; Start-Sleep 1800; $nextJob = Get-Date; continue }
     $nextJob = (Get-Date).AddHours(2)
