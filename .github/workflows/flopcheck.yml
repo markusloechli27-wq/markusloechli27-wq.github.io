@@ -1,0 +1,29 @@
+# Speed check of the flop solver: the Windows programs against a native Linux build, same flop, 10 iterations.
+name: Flop-Tempo
+on: workflow_dispatch
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Windows-Programme
+        run: |
+          cd spin-gold/src && echo "3c2d2c 1" > fl.txt
+          for a in x86-64-v3 x86-64-v2; do
+            echo "== $a"; date +%T
+            MAXIT=10 PF_ISO=1 FULLTREE=1 IPSIZES=1bb,0.33,0.66 PF_HEAP_MB=3000 timeout 1200 ../pc/bin/cbet-$a.exe spin-cb-ranges.json 3h_btn_15_oop 3h_btn_15_ip 4.5 13 fl.txt 1 0 1 | head -c 150; echo
+            date +%T
+          done
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux-Build
+        run: |
+          cd spin-gold/src && gcc -O3 -march=x86-64-v3 -o cbet cbet.c -lm && echo "3c2d2c 1" > fl.txt
+          date +%T
+          MAXIT=10 PF_ISO=1 FULLTREE=1 IPSIZES=1bb,0.33,0.66 PF_HEAP_MB=3000 ./cbet spin-cb-ranges.json 3h_btn_15_oop 3h_btn_15_ip 4.5 13 fl.txt 1 0 1 | head -c 150; echo
+          date +%T
