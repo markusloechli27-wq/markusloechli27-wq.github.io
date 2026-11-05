@@ -46,9 +46,11 @@ public static class SpinJob {
   public static bool Init() { H = CreateJobObject(IntPtr.Zero, null); EXT x = new EXT(); x.B.LimitFlags = 0x2000;
     int n = Marshal.SizeOf(typeof(EXT)); IntPtr p = Marshal.AllocHGlobal(n); Marshal.StructureToPtr(x, p, false); return SetInformationJobObject(H, 9, p, (uint)n); }
   public static bool Add(IntPtr proc) { return AssignProcessToJobObject(H, proc); }
+  [DllImport("kernel32.dll")] static extern uint SetThreadExecutionState(uint f);
+  public static void Wach() { SetThreadExecutionState(0x80000001); }   // the PC does not go to sleep while this window is open
 }
 "@
-  $jobOk = [SpinJob]::Init()
+  $jobOk = [SpinJob]::Init(); [SpinJob]::Wach()
 } catch { $jobOk = $false }
 AllesStoppen   # leftovers of an earlier run
 if (GGOffen) { Log 'GGPoker ist offen. Der Rechner startet nicht neben dem GG-Client. Bitte GG schließen und neu starten.'; Read-Host 'Enter zum Beenden'; exit 1 }
@@ -173,7 +175,7 @@ while ($true) {
   }
   foreach ($r in @($running)) { if ($r.p.HasExited) { $running.Remove($r); Fertig $r } }
   $used = 0; foreach ($r in $running) { $used += $r.t.mb }
-  while ($running.Count -lt $Kerne -and $todo.Count -gt 0) {   # next task that fits into the memory budget
+  while ($running.Count -lt $Kerne -and $todo.Count -gt 0 -and (Get-Date) -lt $nextJob) {   # next task that fits into the memory budget (every 2 h: let them finish, then read the job again)
     $pick = $null; foreach ($t in $todo) { if ($used + $t.mb -le $budget -and $t.mb + 500 -le (FreiMB)) { $pick = $t; break } }
     if (-not $pick) { break }
     $todo.Remove($pick); Starte $pick; $used += $pick.mb
