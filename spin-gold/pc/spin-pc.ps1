@@ -10,7 +10,7 @@ $ProgressPreference = 'SilentlyContinue'
 $B = 'https://markusloechli27-wq.github.io/spin-gold/'
 $D = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $D
-$OUT = Join-Path $D 'ergebnis-pc.jsonl'
+$OUT = Join-Path $D 'ergebnis-pc-v2.jsonl'   # v2: the first version lost the solver settings on the way to the programs
 $UTF8 = New-Object Text.UTF8Encoding $false   # no byte order mark: every line must be plain JSON
 $TMP = Join-Path $D 'tmp'; New-Item -ItemType Directory -Force -Path $TMP | Out-Null
 [Environment]::CurrentDirectory = $D
@@ -116,21 +116,28 @@ function Vorbereiten {
 # ---- one task = one process ----
 $ENVKEYS = 'STACKS', 'MODEL', 'PATCH', 'PF_ISO', 'FULLTREE', 'IPSIZES', 'OOPSIZES', 'TRSIZES', 'PF_HEAP_MB', 'OMP_NUM_THREADS'
 $seq = 0
+# Each solve runs as cmd /c "program args > out 2> err" with its settings put straight into the start info: Start-Process in
+# Windows PowerShell does not hand environment variables set in the script to the program.
+function Launch($exe, [string[]]$argv, $envs, $o, $e) {
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = $env:ComSpec
+  $q = ($argv | ForEach-Object { '"' + $_ + '"' }) -join ' '
+  $psi.Arguments = '/d /s /c ""' + $exe + '" ' + $q + ' > "' + $o + '" 2> "' + $e + '""'
+  $psi.WorkingDirectory = $D; $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+  foreach ($k in $ENVKEYS) { if ($psi.EnvironmentVariables.ContainsKey($k)) { $psi.EnvironmentVariables.Remove($k) } }
+  foreach ($k in $envs.Keys) { $psi.EnvironmentVariables[$k] = [string]$envs[$k] }
+  [System.Diagnostics.Process]::Start($psi)
+}
 function Starte($t) {
   $script:seq++; $o = Join-Path $TMP "o$($script:seq).json"; $e = Join-Path $TMP "e$($script:seq).txt"
-  foreach ($k in $ENVKEYS) { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
   if ($t.kind -eq 'pre') {
-    $env:STACKS = $t.k.Replace('|', ','); $env:MODEL = [string]$t.mi; $env:PATCH = '1'; $env:OMP_NUM_THREADS = '1'
-    $p = Start-Process -FilePath $exeM -ArgumentList '3h', $t.k.Split('|')[0], [string]$job.iters, '0' -WorkingDirectory $D -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
+    $envs = @{ STACKS = $t.k.Replace('|', ','); MODEL = [string]$t.mi; PATCH = '1'; OMP_NUM_THREADS = '1' }
+    $p = Launch $exeM @('3h', $t.k.Split('|')[0], [string]$job.iters, '0') $envs $o $e
   } else {
     $fl = Join-Path $TMP "fl$($script:seq).txt"; Set-Content -Path $fl -Value "$($t.fl) 1" -Encoding ASCII
-    foreach ($pr in $t.env.PSObject.Properties) { Set-Item "Env:$($pr.Name)" ([string]$pr.Value) }
-    $env:PF_HEAP_MB = [string]$t.mb
-    $p = Start-Process -FilePath $exeC -ArgumentList 'spin-cb-ranges.json', "$($t.sid)_oop", "$($t.sid)_ip", [string]$t.pot, [string]$t.stack, $fl, '1', '0', '1' `
-      -WorkingDirectory $D -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
+    $envs = @{ PF_HEAP_MB = [string]$t.mb }; foreach ($pr in $t.env.PSObject.Properties) { $envs[$pr.Name] = [string]$pr.Value }
+    $p = Launch $exeC @('spin-cb-ranges.json', "$($t.sid)_oop", "$($t.sid)_ip", [string]$t.pot, [string]$t.stack, $fl, '1', '0', '1') $envs $o $e
   }
-  foreach ($k in $ENVKEYS) { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
-  $null = $p.Handle   # keeps the exit code readable after the process ends
   if ($jobOk) { try { [void][SpinJob]::Add($p.Handle) } catch {} }
   try { $p.PriorityClass = 'BelowNormal' } catch {}
   [void]$running.Add(@{ p = $p; t = $t; o = $o; e = $e; t0 = Get-Date })

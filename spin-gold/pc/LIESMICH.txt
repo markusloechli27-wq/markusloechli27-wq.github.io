@@ -3,7 +3,7 @@ Spin & Gold PC-Rechner
 
 Was er macht
   Er rechnet Preflop-Lösungen und Flops für die Poker-Review-App, mit allen Kernen bis auf einen.
-  Die Aufgaben holt er sich selbst von GitHub, die Ergebnisse landen in ergebnis-pc.jsonl in diesem Ordner.
+  Die Aufgaben holt er sich selbst von GitHub, die Ergebnisse landen in ergebnis-pc-v2.jsonl in diesem Ordner.
 
 Starten
   Doppelklick auf Rechnen-starten.bat. Das Fenster offen lassen.

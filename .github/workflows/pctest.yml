@@ -13,12 +13,12 @@ jobs:
           Invoke-WebRequest -UseBasicParsing "https://markusloechli27-wq.github.io/spin-gold/pc/spin-pc.ps1?t=$(Get-Date -UFormat %s)" -OutFile "$d\spin-pc.ps1"
           powershell -NoProfile -ExecutionPolicy Bypass -File "$d\spin-pc.ps1" -Max 3 -Kerne 2
           Get-Content "$d\log.txt"
-          python -c "import json,sys; L=[json.loads(l) for l in open(sys.argv[1], encoding='utf-8')]; print(len(L), 'lines'); [print(o['v'], o.get('m'), o.get('k'), 'base' if 'd' in o else 'patch', len(o.get('d') or o.get('pd') or {}), 'nodes', sum(1 for n in (o.get('pd') or {}).values() if 'lk' in n), 'with lk') for o in L]" "$d\ergebnis-pc.jsonl"
+          python -c "import json,sys; L=[json.loads(l) for l in open(sys.argv[1], encoding='utf-8')]; print(len(L), 'lines'); [print(o['v'], o.get('m'), o.get('k'), 'base' if 'd' in o else 'patch', len(o.get('d') or o.get('pd') or {}), 'nodes', sum(1 for n in (o.get('pd') or {}).values() if 'lk' in n), 'with lk', o.get('ex', '')) for o in L]; B=[o for o in L if 'd' in o]; assert B[0]['d'] != B[1]['d'], 'stacks did not reach the program'" "$d\ergebnis-pc-v2.jsonl"
       - name: Flop
         shell: powershell
         run: |
           $d = Join-Path $env:RUNNER_TEMP 'SpinRechner'
           powershell -NoProfile -ExecutionPolicy Bypass -File "$d\spin-pc.ps1" -Max 1 -Kerne 2 -NurFlops
           Get-Content "$d\log.txt" -Tail 4
-          Get-Content "$d\ergebnis-pc.jsonl" | Select-Object -Last 1 | ForEach-Object { $_.Substring(0, [Math]::Min(300, $_.Length)) }
-          python -c "import json,sys; L=[json.loads(l) for l in open(sys.argv[1], encoding='utf-8')]; f=[o for o in L if 'sid' in o]; print(len(f), 'flops', [(o['sid'], o['r']['flop'], o['r'].get('expl')) for o in f])" "$d\ergebnis-pc.jsonl"
+          Get-Content "$d\ergebnis-pc-v2.jsonl" | Select-Object -Last 1 | ForEach-Object { $_.Substring(0, [Math]::Min(300, $_.Length)) }
+          python -c "import json,sys; L=[json.loads(l) for l in open(sys.argv[1], encoding='utf-8')]; f=[o for o in L if 'sid' in o]; print(len(f), 'flops', [(o['sid'], o['r']['flop'], o['r'].get('expl'), o['r']['cbet']['acts']) for o in f]); assert len(f[0]['r']['cbet']['acts']) == 5, 'flop settings did not reach the program'" "$d\ergebnis-pc-v2.jsonl"
