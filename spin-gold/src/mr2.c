@@ -272,6 +272,62 @@ static void solve(int iters, int verbose) {
   }
 }
 
+// ---- lines the equilibrium never takes (PATCH=1) ----
+// When a player (almost) never takes an action, the numbers behind it mean nothing: his own hands have no weight there,
+// and the others answer a range of next to nothing. With PATCH set, such an action is given the hands for which it is
+// worth most (PATCH_SHARE of the range that gets there, default 10 %; a value-heavy range, the way people deviate in
+// practice), and the subtree behind it is solved again with that range while everything above stays as solved. Two rounds (a short one, then the full one), so the choice of hands
+// sees the solved continuation.
+// Without PATCH the program and its output are unchanged.
+static double *LOCK[MAXN];   // patched child: factor on the range of the player who acts at the parent
+static int PATCHOF[MAXN];    // nearest patched node on the path to this node (itself included), -1 if none
+static void reach_avg(void) {   // reach of every node with the average strategies and the patches (children come after parents)
+  for (int q = 0; q < NPL; q++) for (int h = 0; h < NC; h++) RCH[0][q][h] = 1;
+  for (int id = 0; id < NN; id++) { const Node *n = &N[id]; if (n->term) continue; double st[MAXA * NC]; avg_strategy(n, st);
+    for (int k = 0; k < n->nact; k++) { int c = n->child[k];
+      for (int q = 0; q < NPL; q++) for (int h = 0; h < NC; h++) RCH[c][q][h] = RCH[id][q][h] * (q != n->player ? 1 : LOCK[c] ? LOCK[c][h] : st[k * NC + h]); } }
+}
+static void sub_reset(int id) { Node *n = &N[id]; if (n->term) return;
+  memset(n->reg, 0, sizeof(double) * n->nact * NC); memset(n->avg, 0, sizeof(double) * n->nact * NC); for (int k = 0; k < n->nact; k++) sub_reset(n->child[k]); }
+static void patch(int rounds, int subit, double share, double minf) {
+  int npatch = 0;
+  for (int r = 0; r < rounds; r++) { reach_avg();
+    for (int id = 0; id < NN; id++) { Node *n = &N[id]; if (n->term) continue; const int p = n->player;
+      int ok = 1; for (int q = 0; q < NPL; q++) { double t = 0; for (int h = 0; h < NC; h++) t += RCH[id][q][h] * ncombo[h]; if (t < 1e-9) ok = 0; }
+      if (!ok) continue;   // this node itself does not happen (only below a fold nobody makes)
+      double st[MAXA * NC], tot = 0, f[MAXA]; avg_strategy(n, st); int need = 0;
+      for (int h = 0; h < NC; h++) tot += RCH[id][p][h] * ncombo[h];
+      for (int k = 0; k < n->nact; k++) { f[k] = 0; for (int h = 0; h < NC; h++) f[k] += RCH[id][p][h] * ncombo[h] * st[k * NC + h];
+        if (n->act[k] != A_F && f[k] < minf * tot) need = 1; }
+      if (!need) continue;
+      backward(0, p, 0, 0, 1);   // values of p's actions here, with the average strategies and the patches so far
+      double norm[NC], mq[NC]; for (int h = 0; h < NC; h++) norm[h] = 1;
+      for (int q = 0; q < NPL; q++) if (q != p) { mvec(RCH[id][q], mq); for (int h = 0; h < NC; h++) norm[h] *= mq[h]; }
+      for (int k = 0; k < n->nact; k++) { const int c = n->child[k]; if (n->act[k] == A_F || f[k] >= minf * tot) continue;
+        double loss[NC]; int ord[NC];   // sorted by the value of this action, best first
+        for (int h = 0; h < NC; h++) { loss[h] = norm[h] > 1e-15 ? -CFV[c][h] / norm[h] : 1e300; ord[h] = h; }
+        for (int i = 1; i < NC; i++) { int x = ord[i], j = i; while (j > 0 && loss[ord[j - 1]] > loss[x]) { ord[j] = ord[j - 1]; j--; } ord[j] = x; }
+        if (!LOCK[c]) LOCK[c] = malloc(sizeof(double) * NC);
+        double acc = 0, want = share * tot; for (int h = 0; h < NC; h++) LOCK[c][h] = 0;
+        for (int i = 0; i < NC && acc < want; i++) { int h = ord[i]; double w = RCH[id][p][h] * ncombo[h]; if (w <= 0) continue;
+          double fr = fmin(1, (want - acc) / w); LOCK[c][h] = fr; acc += w * fr; }
+        for (int q = 0; q < NPL; q++) for (int h = 0; h < NC; h++) RCH[c][q][h] = RCH[id][q][h] * (q == p ? LOCK[c][h] : 1);
+        sub_reset(c);
+        for (int it = 1, ni = r ? subit : subit / 2; it <= ni; it++) { forward(c, it); for (int q = 0; q < NPL; q++) backward(c, q, it, 1, 0); }
+        if (r == 0) npatch++;
+        if (getenv("PATCH_DEBUG") && r) { const char *RKs = "AKQJT98765432"; fprintf(stderr, "  %s:", N[c].path);
+          for (int i = 0; i < NC; i++) { int h = ord[i]; if (LOCK[c][h] <= 0) continue; int a = h / 13, b = h % 13;
+            if (a == b) fprintf(stderr, " %c%c", RKs[a], RKs[a]); else if (b > a) fprintf(stderr, " %c%cs", RKs[a], RKs[b]); else fprintf(stderr, " %c%co", RKs[b], RKs[a]); }
+          fprintf(stderr, "\n"); }
+      }
+      reach_avg();
+    }
+  }
+  for (int id = 0; id < NN; id++) PATCHOF[id] = LOCK[id] ? id : N[id].parent >= 0 ? PATCHOF[N[id].parent] : -1;
+  reach_avg();
+  fprintf(stderr, "  patched %d lines nobody plays\n", npatch);
+}
+
 static void dump(FILE *o, double stack, const char *game) {
   fprintf(o, "{\"game\":\"%s\",\"S\":%g,\"nodes\":[", game, stack);
   int first = 1;
@@ -282,7 +338,11 @@ static void dump(FILE *o, double stack, const char *game) {
     for (int k = 0; k < n->nact; k++) fprintf(o, "%s\"%s\"", k ? "," : "", ANAME[n->act[k]]);
     fprintf(o, "],\"f\":[");
     for (int k = 0; k < n->nact; k++) { fprintf(o, "%s[", k ? "," : ""); for (int h = 0; h < NC; h++) fprintf(o, "%s%d", h ? "," : "", (int)lrint(st[k * NC + h] * 1000)); fprintf(o, "]"); }
-    fprintf(o, "]}");
+    fprintf(o, "]");
+    if (PATCHOF[id] >= 0) {   // behind a patched action: which one, and the actor's own reach (the app cannot get it from the frequencies)
+      fprintf(o, ",\"lk\":\"%s\",\"r\":[", N[PATCHOF[id]].path);
+      for (int h = 0; h < NC; h++) fprintf(o, "%s%d", h ? "," : "", (int)lrint(fmin(1, RCH[id][n->player][h]) * 1000)); fprintf(o, "]"); }
+    fprintf(o, "}");
   }
   fprintf(o, "]}\n");
 }
@@ -323,6 +383,8 @@ int main(int argc, char **argv) {
   int dec = 0; for (int i = 0; i < NN; i++) dec += !N[i].term;
   fprintf(stderr, "%s %g BB: %d nodes, %d decisions\n", game, S, NN, dec);
   double t0 = omp_get_wtime(); solve(iters, verbose); fprintf(stderr, "  %.1f s\n", omp_get_wtime() - t0);
+  for (int i = 0; i < NN; i++) PATCHOF[i] = -1;
+  if (getenv("PATCH")) { t0 = omp_get_wtime(); patch(2, iters / 2, getenv("PATCH_SHARE") ? atof(getenv("PATCH_SHARE")) : 0.10, 0.005); fprintf(stderr, "  patch %.1f s\n", omp_get_wtime() - t0); }
   if (getenv("DEBUG_EV")) { // EV of each root action per hand for the first player, with average strategies
     for (int q = 0; q < NPL; q++) for (int h = 0; h < NC; h++) RCH[0][q][h] = 1;
     int stk[MAXN], sp = 0; stk[sp++] = 0;

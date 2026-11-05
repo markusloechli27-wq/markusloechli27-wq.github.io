@@ -3,6 +3,8 @@
 # Takes its work from GitHub Pages (spin-auftrag.json): preflop solves with mr2 (one stack combination each,
 # results in ergebnis.jsonl), then flop solves with cbet (one flop of one spot each, results in cb-ergebnis.jsonl),
 # then the less urgent preflop solves in 'late' (finer ChipEV grid, payout models with prizes for 2nd and 3rd).
+# Each preflop solve also solves the lines nobody plays with an assumed range (mr2 PATCH=1, version 'vp'); 'patch' and
+# 'patch_late' redo combinations that so far only have the base result.
 # Waits while there is nothing to do and checks for new work, so new tasks arrive without a new command on the Pi.
 # Updates itself: when the job names a newer version of this file, it downloads it and restarts (systemd restarts it).
 import json, subprocess, base64, os, sys, time, urllib.request, hashlib
@@ -19,14 +21,17 @@ def fetch(name, want):  # download a file and check that it is the version the j
     if want and sha(data) != want: raise RuntimeError(name + ' noch nicht aktuell (Cache), nächster Versuch in 5 Minuten')
     open(name, 'wb').write(data)
 
-def pack(nodes, keep):  # 4-bit frequencies of the displayed spots, same format as the app
+def q4(vals): return base64.b64encode(bytes((vals[i] | (vals[i + 1] << 4)) if i + 1 < len(vals) else vals[i] for i in range(0, len(vals), 2))).decode()
+def pack(nodes, keep, patched=False):  # 4-bit frequencies of the displayed spots, same format as the app (patched: lines behind a patch and all other nodes)
     out = {}
     for n in nodes:
-        if n['path'] not in keep: continue
+        want = ('lk' in n or n['path'] not in keep) if patched else (n['path'] in keep and 'lk' not in n)
+        if not want: continue
         acts = [a for a in n['acts'] if a not in ('fold', 'check')]
         vals = [min(15, max(0, round(v / 1000 * 15))) for a in acts for v in n['f'][n['acts'].index(a)]]
         b = bytes((vals[i] | (vals[i + 1] << 4)) if i + 1 < len(vals) else vals[i] for i in range(0, len(vals), 2))
         out[n['path']] = {'p': n['p'], 'acts': acts, 'rest': 'check' if 'check' in n['acts'] else 'fold', 'f': base64.b64encode(b).decode()}
+        if patched and 'lk' in n: out[n['path']].update(lk=n['lk'], r=q4([min(15, max(0, round(v / 1000 * 15))) for v in n['r']]))
     return out
 
 def keys(fn, f):
@@ -61,11 +66,13 @@ def prepare(job):  # programs and calibration of this job version
 
 def preflop(job, m, k):
     t0 = time.time(); st = k.replace('|', ',')
-    r = subprocess.run(['./mr2', '3h', st.split(',')[0], str(job['iters']), '0'], capture_output=True, text=True,
-                       env=dict(os.environ, STACKS=st, MODEL=str(MODELS.index(m))))
+    env = dict(os.environ, STACKS=st, MODEL=str(MODELS.index(m)), **({'PATCH': '1'} if job.get('vp') else {}))
+    r = subprocess.run(['./mr2', '3h', st.split(',')[0], str(job['iters']), '0'], capture_output=True, text=True, env=env)
     if r.returncode: log('Fehler bei', m, k, r.stderr[-200:]); return False
     ex = r.stderr.strip().split('\n')[-2].strip()
-    line = json.dumps({'v': job['v'], 'm': m, 'k': k, 'ex': ex, 'd': pack(json.loads(r.stdout)['nodes'], set(job['spots']))}, separators=(',', ':'))
+    nodes = json.loads(r.stdout)['nodes']
+    line = json.dumps({'v': job['v'], 'm': m, 'k': k, 'ex': ex, 'd': pack(nodes, set(job['spots']))}, separators=(',', ':'))
+    if job.get('vp'): line += '\n' + json.dumps({'v': job['vp'], 'm': m, 'k': k, 'pd': pack(nodes, set(job['spots']), True)}, separators=(',', ':'))
     with open('ergebnis.jsonl', 'a') as f: f.write(line + '\n')
     allt = job['tasks'] + job.get('late', [])
     done = len(keys('ergebnis.jsonl', lambda o: (o['v'], o['m'], o['k'])) & {(job['v'], a, b) for a, b in allt})
@@ -104,9 +111,13 @@ while True:
         cdone = keys('cb-ergebnis.jsonl', lambda o: (o['v'], o['sid'], o['r']['flop']))
         ctodo = [t for t in cb['tasks'] if (cb['v'], t[0], t[1]) not in cdone]
         if ctodo: flop(cb, ctodo[0]); continue
-    late = [t for t in job.get('late', []) if (v, t[0], t[1]) not in done]   # after the flops
-    if late:
-        for m, k in late[:5]:
-            if not preflop(job, m, k): time.sleep(60); break
-        continue
+    vp = job.get('vp')
+    for lst, ver in (('patch', vp), ('late', v), ('patch_late', vp)):   # after the flops: ChipEV patches, then the rest
+        rest = [t for t in job.get(lst, []) if ver and (ver, t[0], t[1]) not in done]
+        if rest:
+            for m, k in rest[:5]:
+                if not preflop(job, m, k): time.sleep(60); break
+            break
+    else: rest = None
+    if rest: continue
     log('Alles fertig. Warte auf neue Aufgaben.'); time.sleep(1800)
