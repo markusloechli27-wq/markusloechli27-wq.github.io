@@ -43,6 +43,7 @@ jobs:
           MAXIT=2 PF_ISO=1 FULLTREE=1 PF_HEAP_MB=1500 ../pc/bin/cbet-x86-64-v2.exe spin-cb-ranges.json 3h_btn_10_oop 3h_btn_10_ip 4.5 8 fl.txt 1 0 1 | head -c 120 && echo
           rm -f eqr.txt hu.json h3.json fl.txt
       - name: Commit
+        shell: bash
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
