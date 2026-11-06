@@ -14,10 +14,9 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File "$d\spin-pc.ps1" -Max 9 -Kerne 2
           Get-Content "$d\log.txt"
           python -c "import json,sys; L=[json.loads(l) for l in open(sys.argv[1], encoding='utf-8')]; print(len(L), 'lines'); [print(o['v'], o.get('m'), o.get('k'), 'base' if 'd' in o else 'patch', len(o.get('d') or o.get('pd') or {}), 'nodes', sum(1 for n in (o.get('pd') or {}).values() if 'lk' in n), 'with lk', o.get('ex', '')) for o in L]; P={o['k']: o['pd'] for o in L if 'pd' in o}; print('distinct patched results', len({json.dumps(v, sort_keys=True) for v in P.values()}), 'of', len(P)); W=[o for o in L if 'pd' in o and float(o['k'].split('|')[1]) >= 12]; assert W, 'no combination with SB 12+ in the test'; A={**W[0]['pd'], **[o for o in L if 'd' in o and o['k']==W[0]['k']][0]['d']}; print(W[0]['k'], 'F-R' in A, 'F-r' in A); assert 'F-R' in A and 'F-r' in A, 'F-R and F-r mixed up'" "$d\ergebnis-pc-v2.jsonl"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ergebnis-preflop
-          path: ${{ runner.temp }}/SpinRechner/ergebnis-pc-v2.jsonl
+      - name: Preflop-Zeilen zum Nachrechnen
+        shell: powershell
+        run: Get-Content (Join-Path $env:RUNNER_TEMP 'SpinRechner\ergebnis-pc-v2.jsonl') | Select-Object -First 4 | ForEach-Object { 'ROW ' + $_ }
       - name: Flop
         shell: powershell
         run: |
