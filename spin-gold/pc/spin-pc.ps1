@@ -72,7 +72,9 @@ function Q4([int[]]$vals) {
   [Convert]::ToBase64String($b)
 }
 function Pack($nodes, $keep, [bool]$patched) {   # patched: lines behind a patch (with the actor's reach) and every node the base leaves out
-  $out = [ordered]@{}
+  # case-sensitive keys: the lines "F-R" (minraise) and "F-r" (raise to 3 BB) are different spots; a PowerShell [ordered]@{}
+  # ignores case and put one into the other (worker version 1)
+  $out = New-Object System.Collections.Specialized.OrderedDictionary ([StringComparer]::Ordinal)
   foreach ($n in $nodes) {
     $hasLk = $n.PSObject.Properties.Name -contains 'lk'; $inKeep = $keep.Contains([string]$n.path)
     $want = if ($patched) { $hasLk -or -not $inKeep } else { $inKeep -and -not $hasLk }
@@ -149,7 +151,7 @@ function Fertig($r) {
   if (-not $ok) { Log "Fehler bei $($t.name) (Code $($r.p.ExitCode)): $((Get-Content $r.e -Tail 2 -ErrorAction SilentlyContinue) -join ' ')"; $script:fails[$t.key] = 1 + [int]$script:fails[$t.key] }
   elseif ($t.kind -eq 'pre') {
     $js = [IO.File]::ReadAllText($r.o) | ConvertFrom-Json; $ex = ''; foreach ($l in @(Get-Content $r.e)) { if ([string]$l -match 'exploitability') { $ex = ([string]$l).Trim() } }
-    $lines = (J ([ordered]@{ v = $job.v; m = $t.m; k = $t.k; ex = $ex; d = (Pack $js.nodes $keep $false) })) + "`n" + (J ([ordered]@{ v = $job.vp; m = $t.m; k = $t.k; pd = (Pack $js.nodes $keep $true) }))
+    $lines = (J ([ordered]@{ v = $job.v; w = 2; m = $t.m; k = $t.k; ex = $ex; d = (Pack $js.nodes $keep $false) })) + "`n" + (J ([ordered]@{ v = $job.vp; w = 2; m = $t.m; k = $t.k; pd = (Pack $js.nodes $keep $true) }))
     [IO.File]::AppendAllText($OUT, $lines + "`n", $UTF8)
     [void]$done.Add("$($job.v)|$($t.m)|$($t.k)"); [void]$done.Add("$($job.vp)|$($t.m)|$($t.k)")
   } else {
