@@ -92,8 +92,13 @@ function J($o) { ConvertTo-Json $o -Depth 12 -Compress }
 
 # ---- what is done already ----
 $done = New-Object 'System.Collections.Generic.HashSet[string]'
-if (Test-Path $OUT) { foreach ($l in [IO.File]::ReadLines($OUT)) { try { $o = $l | ConvertFrom-Json
-  if ($o.PSObject.Properties.Name -contains 'sid') { [void]$done.Add("$($o.v)|$($o.sid)|$($o.r.flop)") } else { [void]$done.Add("$($o.v)|$($o.m)|$($o.k)") } } catch {} } }
+# read the keys with a pattern: ConvertFrom-Json in Windows PowerShell rejects these lines (an empty key "" for the first
+# decision, and keys that differ only in case), so before version 3 no preflop result counted as done after a restart
+$rxV = [regex]'^\{"v":"([^"]+)"'; $rxM = [regex]'"m":"([^"]+)","k":"([^"]+)"'; $rxS = [regex]'"sid":"([^"]+)","r":\{"flop":"([^"]+)"'
+if (Test-Path $OUT) { foreach ($l in [IO.File]::ReadLines($OUT)) { $v = $rxV.Match($l); if (-not $v.Success) { continue }
+  $s = $rxS.Match($l); if ($s.Success) { [void]$done.Add("$($v.Groups[1].Value)|$($s.Groups[1].Value)|$($s.Groups[2].Value)"); continue }
+  $m = $rxM.Match($l); if ($m.Success) { [void]$done.Add("$($v.Groups[1].Value)|$($m.Groups[1].Value)|$($m.Groups[2].Value)") } } }
+Log "Schon fertig in diesem Ordner: $($done.Count) Ergebnisse."
 
 # ---- programs: the faster build when this CPU has AVX2 ----
 $job = $null; $exeM = $null; $exeC = $null
