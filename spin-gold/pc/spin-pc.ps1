@@ -101,6 +101,8 @@ function Vorbereiten {
     Fetch 'pc/spin-pc.ps1' 'spin-pc.ps1.neu' $script:job.worker; Move-Item -Force (Join-Path $D 'spin-pc.ps1.neu') $PSCommandPath
     Log 'Neue Version geladen, starte neu.'; Start-Process powershell -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"" -WorkingDirectory $D; exit 0 }
   $bins = $script:job.bins
+  foreach ($f in 'Ergebnis-einpacken.bat', 'Rechnen-starten.bat', 'LIESMICH.txt') {   # helper files follow the worker version
+    try { Invoke-WebRequest -UseBasicParsing -Uri (Url "pc/$f") -OutFile (Join-Path $D $f) -TimeoutSec 60 } catch {} }
   foreach ($a in 'x86-64-v3', 'x86-64-v2') { Fetch "pc/bin/mr2-$a.exe" "mr2-$a.exe" $bins."mr2-$a"; Fetch "pc/bin/cbet-$a.exe" "cbet-$a.exe" $bins."cbet-$a" }
   Fetch 'src/eq.bin' 'eq.bin' $null; Fetch 'src/p3.bin' 'p3.bin' $null
   Fetch 'src/spin-eqr.txt' 'eqr.txt' $script:job.eqr
