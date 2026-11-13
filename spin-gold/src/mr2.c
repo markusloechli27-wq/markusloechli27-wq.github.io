@@ -1,4 +1,4 @@
-// Spin & Gold early levels: preflop solver with fold / limp / minraise / all-in (3-handed and heads-up),
+// Spin & Gold early levels: preflop solver with fold / limp / minraise / iso-raise over limps / all-in (3-handed and heads-up),
 // any starting stacks, ChipEV or ICM (x10 8/2, x50-x100 60/30/10, jackpot 50/30/20).
 // Hands are the 169 classes; card removal through P(opponent class | own class); all-in equity from eq.bin / p3.bin.
 // Pots that see a flop are valued by equity realization: share = equity * r / sum(equity * r) with r from position,
@@ -54,8 +54,11 @@ static int build(St s, int last, int parent) {
   else if (s.cur <= 1 + 1e-9) {
     if (!isBB) { opts[no++] = A_F; opts[no++] = A_L; if (s.limpers == 0 && X[p] > 3) opts[no++] = A_R2;
       if (NPL == 3 && p == 1 && s.limpers == 0 && !s.active[0] && X[p] >= 12) opts[no++] = A_R3;   // SB opens to 3 BB after the BTN folds
+      if (NPL == 3 && p == 1 && s.limpers == 1 && s.active[0] && X[p] > 4.5) opts[no++] = A_R3;   // SB iso-raises the BTN's limp to 3 BB
       opts[no++] = A_J; }
-    else { opts[no++] = A_X; if (s.limpers == 1 && nactive(&s) == 2 && X[p] > 4.5) opts[no++] = A_R3; opts[no++] = A_J; }
+    else { opts[no++] = A_X; if (s.limpers == 1 && nactive(&s) == 2 && X[p] > 4.5) opts[no++] = A_R3;
+      if (s.limpers == 2 && X[p] > 6) opts[no++] = A_R3;   // BB iso-raises two limpers to 4 BB
+      opts[no++] = A_J; }
   } else { opts[no++] = A_F; opts[no++] = A_C;
     if (s.raises == 1 && 2.25 * s.cur <= 0.4 * X[p] + 1e-9) opts[no++] = A_3B;   // small 3-bet to 2.25x the raise while it is at most 40 % of the stack
     opts[no++] = A_J; }
@@ -69,7 +72,7 @@ static int build(St s, int last, int parent) {
       case A_C: c.inv[p] = fmin(X[p], c.cur); break;
       case A_L: c.inv[p] = 1; c.limpers++; break;
       case A_R2: c.inv[p] = 2; c.cur = 2; c.aggr = p; c.raises++; for (int q = 0; q < NPL; q++) if (q != p) c.acted[q] = 0; break;
-      case A_R3: c.inv[p] = 3; c.cur = 3; c.aggr = p; c.raises++; for (int q = 0; q < NPL; q++) if (q != p) c.acted[q] = 0; break;
+      case A_R3: { double to = s.limpers >= 2 ? 4 : 3; c.inv[p] = to; c.cur = to; } c.aggr = p; c.raises++; for (int q = 0; q < NPL; q++) if (q != p) c.acted[q] = 0; break;
       case A_3B: c.inv[p] = 2.25 * s.cur; c.cur = 2.25 * s.cur; c.aggr = p; c.raises++; for (int q = 0; q < NPL; q++) if (q != p) c.acted[q] = 0; break;
       case A_J: c.inv[p] = X[p]; if (X[p] > c.cur) c.cur = X[p]; c.jam = 1; c.aggr = p; for (int q = 0; q < NPL; q++) if (q != p) c.acted[q] = 0; break;
     }
