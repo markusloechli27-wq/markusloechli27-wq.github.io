@@ -110,7 +110,9 @@ while True:
     if cb:
         cdone = keys('cb-ergebnis.jsonl', lambda o: (o['v'], o['sid'], o['r']['flop']))
         ctodo = [t for t in cb['tasks'] if (cb['v'], t[0], t[1]) not in cdone]
-        if ctodo: flop(cb, ctodo[0]); continue
+        if ctodo:   # the first flop that fits into the free memory (Jarvis keeps some), else wait for the smallest
+            free = mem_free_mb(); fit = [t for t in ctodo if t[5] + 300 <= free]
+            flop(cb, fit[0] if fit else min(ctodo, key=lambda t: t[5])); continue
     vp = job.get('vp')
     for lst, ver in (('patch', vp), ('late', v), ('patch_late', vp)):   # after the flops: ChipEV patches, then the rest
         rest = [t for t in job.get(lst, []) if ver and (ver, t[0], t[1]) not in done]
