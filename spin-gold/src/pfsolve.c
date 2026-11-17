@@ -417,7 +417,7 @@ static void walk(int ni, int trav, const float *reach, float *out, int mode) {
 }
 EXPORT("pf_iterate") void pf_iterate(void) {
   ITER++; float t = (float)ITER, ta = t * __builtin_sqrtf(t);
-  DPOS = ta / (ta + 1); DNEG = .5f; GAM = (t / (t + 1)) * (t / (t + 1));
+  DPOS = ta / (ta + 1); DNEG = .5f; float q = t / (t + 1); GAM = q * q * q * q * q;   // gamma 5 (was 2): later iterations weigh more (convergence test 16 Nov 2026)
   for (int trav = 0; trav < 2; trav++) { SCR_TOP = 0; float *out = scr(NH[trav]); walk(0, trav, W[1 - trav], out, 0); }
 }
 EXPORT("pf_iterations") int pf_iterations(void) { return ITER; }

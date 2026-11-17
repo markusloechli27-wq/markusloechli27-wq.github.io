@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     for (int b = 1; b < 52; b++) for (int a = 0; a < b; a++) { int c = class_of(a, b), ix = combo_index(a, b); win[ix] = R0[c]; win[1326 + ix] = R1[c]; }
     if (getenv("ESTIMATE")) { double est = pf_estimate(); fprintf(stderr, "%s estimate %.0f MB, %d nodes\n", key, est / 1048576.0, pf_est_nodes()); done++; continue; }
     if (pf_setup() < 0) { fprintf(stderr, "setup failed %s\n", key); continue; }
-    int it = 0, maxit = getenv("MAXIT") ? atoi(getenv("MAXIT")) : 60; float ex = 100; while (it < maxit) { pf_iterate(); it++; if (it % 10 == 0) { ex = pf_exploitability(); if (ex < 1.0f) break; } }
+    int it = 0, maxit = getenv("MAXIT") ? atoi(getenv("MAXIT")) : 120; float ex = 100; while (it < maxit) { pf_iterate(); it++; if (it % 10 == 0) { ex = pf_exploitability(); if (ex < 0.3f) break; } }   // 120 iterations (was 60, stop at 1 %): 2 points from the precise bet frequency instead of 13
     // root (OOP) -> check -> IP node (c-bet) -> bet -> OOP node (facing the min bet)
     int root = 0, chk = -1, bet = -1;
     for (int a = 0; a < NODES[root].nact; a++) if (NODES[NODES[root].child + a].acttype == A_CHECK) chk = NODES[root].child + a;
