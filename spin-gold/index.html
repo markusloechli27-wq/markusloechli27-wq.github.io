@@ -3245,7 +3245,15 @@ function handleRead(r, t, manual) {
   if (raw.buttons && post && SH && SH.street === 1) { // flop decision in a minraised pot: min c-bet strategy
     const key = "post|" + SH.id + "|" + SH.streets[1].acts.length;
     if (key !== vr.lastKey) { vr.lastKey = key; const adv = cbAdvice(SH);
-      if (adv && adv.f) { const sp = { spinPost: true, t, SH, adv, cards: SH.cards, street: 1, nActs: SH.streets[1].acts.length }; vr.spots.push(sp); vr.cur = sp; renderVPanel(sp); renderTimeline(); vLive(`Flop-Entscheidung bei ${tFmt(t)} erkannt`, true); if (!vr.cam && $("vPause").checked && !manual) vid.pause(); return; } }
+      if (adv && adv.f) { const sp = { spinPost: true, t, SH, adv, cards: SH.cards, street: 1, nActs: SH.streets[1].acts.length }; vr.spots.push(sp); vr.cur = sp; renderVPanel(sp); renderTimeline(); vLive(`Flop-Entscheidung bei ${tFmt(t)} erkannt`, true); if (!vr.cam && $("vPause").checked && !manual) vid.pause(); return; }
+      if (adv && adv.miss) { vLive(`Flop: ${adv.miss}`, true); return; } }
+  }
+  if (raw.buttons && post && SH && SH.street >= 2) { // turn and river: solved live on this device (spin_tr.js), shown once ready
+    const akey = `${SH.id}|${SH.street}|${SH.streets[SH.street].acts.length}`, key = "post|" + akey;
+    if (key !== vr.lastKey) { vr.lastKey = key;
+      const sp = { spinTR: true, t, SH, akey, cards: SH.cards, street: SH.street, snap: SH.streets.slice(2, SH.street + 1).map(x => ({ acts: x.acts.filter(a => !a.est || a.t === "check").map(a => Object.assign({}, a)), board: x.board.slice() })) };
+      vr.spots.push(sp); vr.cur = sp; sptAdvice(SH, sp); renderVPanel(sp); renderTimeline();
+      vLive(`${SH.street === 2 ? "Turn" : "River"}-Entscheidung bei ${tFmt(t)} erkannt`, true); if (!vr.cam && $("vPause").checked && !manual) vid.pause(); return; }
   }
   const info = `${raw.seats.length} Plätze · Dealer ${raw.seats.some(s => s.dealer) ? "ja" : "nein"} · Karten ${raw.hero_cards ? raw.hero_cards : "–"}`;
   vLive(post ? `Postflop – wird nicht bewertet (${info})` : (manual ? `Hier bist du nicht am Zug. Erkannt: ${info}` : `Läuft · erkannt: ${info}`));
@@ -3263,6 +3271,14 @@ vid.addEventListener("pause", () => { clearInterval(vr.timer); });
 vid.addEventListener("seeked", () => { vr.lastKey = null; vr.pending = null; });
 $("vNowBtn").addEventListener("click", () => { vr.lastKey = null; tick(true); });
 $("vMulti").addEventListener("change", reevalAll);
+// the solver's answer for the hero's hand with every option of the tree (limp, minraise, raise to 3, 3-bet, all-in): the
+// main recommendation whenever there is one; the push/fold verdict below it only covers push or fold
+function earlyMainHtml(ea) {
+  if (!ea || !ea.freqs || !ea.freqs.length || ea.freqs.every(x => x.v == null)) return "";
+  const fs = ea.freqs.filter(x => x.v != null).sort((a, b) => b.v - a.v), best = fs[0];
+  return `<div class="vp-lines"><div class="vp-line"><h3>Solver · alle Optionen</h3><div class="decision ${best.a === "fold" ? "fold" : best.a === "allin" ? "push" : "call"}">${EARLY_LABEL[best.a] || best.a}${best.v < .9 ? ` <small>${Math.round(best.v * 100)} %</small>` : ""}</div>`
+    + `<div class="ev">${fs.map(x => `${EARLY_LABEL[x.a] || x.a} ${Math.round(x.v * 100)} %`).join(" · ")}</div>${ea.note ? `<div class="ev muted">${ea.note}</div>` : ""}</div></div>`;
+}
 function verdictOf(sp) {
   const e = sp.ev; if (!e || e.skip || !sp.act || e.costN == null) return null;
   const eps = e.unit.kind === "bb" ? .01 : .0002, okN = e.costN <= eps, okE = e.costE <= eps;
@@ -3283,17 +3299,20 @@ function renderVPanel(sp) {
   }
   if (sp && sp.cash) return renderCashPanel(sp);
   if (sp && sp.spinPost) { el.innerHTML = spinPostHtml(sp); return; }
+  if (sp && sp.spinTR) { el.innerHTML = spinTRHtml(sp); return; }
   if (!sp) { el.innerHTML = `<p class="muted">Starte das Video. Sobald du am Zug bist (Aktions-Buttons sichtbar), erscheint hier die Auswertung.</p>`; return; }
   const e = sp.ev, card = parseCards(sp.cards || "");
   const head = `<div class="vp-head"><span class="vp-time">${mtTag(sp)}${tFmt(sp.t)}</span><span class="vp-spot">${e && e.s ? e.s.title : "Entscheidung"}</span></div>`;
   if (!e || e.skip) { const ea = sp.early, why = e && e.skip === "Daten unvollständig" ? (!card ? "Deine Karten sind auf dem Bild nicht lesbar." : "Nicht alle Stacks sind lesbar.") : "";
-    el.innerHTML = head + `<p>${e && e.skip ? e.skip : "Nicht bewertbar."}${why ? " " + why : ""}</p>` + (!card ? `<p><button type="button" class="btn" id="vPickCards">Karten wählen</button></p>` : "") + (ea && ea.view ? quadRange(ea.title, `${fmt(ea.S)} BB · Solver`, ea.view.layers, ea.view.rest, ea.idx, "") : "");
+    const main = earlyMainHtml(ea);
+    el.innerHTML = head + (main || `<p>${e && e.skip ? e.skip : "Nicht bewertbar."}${why ? " " + why : ""}</p>`) + (!card ? `<p><button type="button" class="btn" id="vPickCards">Karten wählen</button></p>` : "") + (ea && ea.view ? quadRange(ea.title, `${fmt(ea.S)} BB · Solver`, ea.view.layers, ea.view.rest, ea.idx, ea.freqs.map(x => `${EARLY_LABEL[x.a] || x.a} ${x.v == null ? "" : Math.round(x.v * 100) + " %"}`).join(" · ")) : "");
     const pb = $("vPickCards"); if (pb) pb.onclick = () => openCardPick(sp.table || 0); return; }
   const vt = VTYPES.find(v => v.id === vr.vtype);
   const stk = e.x.map((v, i) => `${(e.x.length === 3 ? ["BTN", "SB", "BB"] : ["SB", "BB"])[i]} ${fmt(v.toFixed(1))}`).join(" · ");
   const modelTxt = e.model === "cev" ? "ChipEV" : "ICM";
   let h = head + `<div class="vp-meta"><span class="cardsview">${card ? cardsHtml(card.cs) : ""}</span><span>${stk} BB</span><span>${modelTxt}</span></div>`;
-  h += `<div class="vp-lines"><div class="vp-line"><h3>GTO</h3><div class="decision ${e.gtoAct}">${ACTL[e.gtoAct]}${e.border ? ` <small>knapp</small>` : ""}</div><div class="ev">${ACTL[e.aggr]} ${evText(e.dN, e.unit)} gegenüber Fold</div></div>`;
+  h += earlyMainHtml(sp.early);
+  h += `<div class="vp-lines"><div class="vp-line"><h3>${sp.early && sp.early.view ? "Nur Push/Fold · GTO" : "GTO"}</h3><div class="decision ${e.gtoAct}">${ACTL[e.gtoAct]}${e.border ? ` <small>knapp</small>` : ""}</div><div class="ev">${ACTL[e.aggr]} ${evText(e.dN, e.unit)} gegenüber Fold</div></div>`;
   h += `<div class="vp-line"><h3>Exploit · ${vt.label}</h3><div class="decision ${e.exAct}">${ACTL[e.exAct]}</div><div class="ev">${ACTL[e.aggr]} ${evText(e.dE, e.unit)} gegenüber Fold</div></div></div>`;
   h += `<div class="vp-act"><span>Gespielt:</span>${["fold", e.aggr].map(a => `<button type="button" class="btn" data-vact="${a}" aria-pressed="${sp.act === a}">${ACTL[a]}</button>`).join("")}${sp.act ? "" : `<span class="muted">wird nach der Aktion automatisch erkannt</span>`}</div>`;
   const v = verdictOf(sp);
@@ -3312,6 +3331,7 @@ function renderTimeline() {
   for (const sp of [...vr.spots].reverse()) {
     const e = sp.ev, tr = document.createElement("tr"); tr.className = "clickrow"; tr.tabIndex = 0;
     if (sp.cash) cashTimelineRow(sp, tr);
+    else if (sp.spinTR) { const a = SPT.res.get(sp.akey), cp = parseCards(sp.cards || ""); tr.innerHTML = `<td class="mono">${mtTag(sp)}${tFmt(sp.t)}</td><td>${sp.street === 2 ? "Turn" : "River"}</td><td><span class="cardsview">${cp ? cardsHtml(cp.cs) : ""}</span></td><td class="mono">${sp.SH.heroPos}</td><td colspan="4">${a && a.hero ? "Solver: " + a.hero.label : a && a.miss ? `<span class="muted">${a.miss}</span>` : `<span class="muted">wird gerechnet …</span>`}</td>`; }
     else if (sp.spinPost) { const v = spinPostVerdict(sp), cp = parseCards(sp.cards || ""); tr.innerHTML = `<td class="mono">${mtTag(sp)}${tFmt(sp.t)}</td><td>Flop · ${sp.adv.label || "C-Bet"}</td><td><span class="cardsview">${cp ? cardsHtml(cp.cs) : ""}</span></td><td class="mono">${sp.SH.heroPos}</td><td colspan="2">${spinPostBest(sp)}</td><td>${v ? v.played : "—"}</td><td>${v ? `<span class="${v.cls}">${v.txt}</span>` : `<span class="muted">offen</span>`}</td>`; }
     else if (!e || e.skip) tr.innerHTML = `<td class="mono">${mtTag(sp)}${tFmt(sp.t)}</td><td colspan="7" class="muted">${e && e.skip ? e.skip : "nicht bewertet"}</td>`;
     else {
@@ -4974,10 +4994,13 @@ function spinTrack(raw, t, manual) {
   return H;
 }
 // ---- early-level advice: which solver node the hero is at ----
-function spinLine(H) { // preflop actions before the hero's current decision, as solver path letters
+function spinLine(H, full) { // preflop actions before the hero's current decision, as solver path letters
+  // full: the whole preflop line once the flop is out. Calls that were not seen (the chips go straight into the pot when the
+  // flop comes, so they are only estimated) count, and the big blind's check in a limped pot, which no picture shows, is
+  // added: without them "R-F-C" was read as "R-F" and "F-L-X" as "F-L", and no flop solution was found
   const st = H.streets[0], eff = ctEff(H), out = [];
   for (const a of st.acts) {
-    if (a.est) continue;
+    if (a.est && !(full && a.t === "call")) continue;
     if (a.t === "fold") out.push("F");
     else if (a.t === "check") out.push("X");
     else if (a.t === "call") { const facing = out.length && /[RrJT]/.test(out.join("")); out.push(a.allin || (a.to && a.to >= eff * .9) ? (facing ? "C" : "J") : !facing && a.to <= 1.01 ? "L" : "C"); }
@@ -4986,8 +5009,15 @@ function spinLine(H) { // preflop actions before the hero's current decision, as
       // a first raise above 2.25 BB is the raise to 3 BB, also when it is bigger (it used to count as a minraise)
       out.push(a.allin || to >= eff * .9 ? "J" : raised ? "T" : to <= 2.25 ? "R" : "r"); }
   }
+  if (full && H.street >= 1) {
+    const bb = H.slots.find(s => s.pos === "BB"), raised = out.some(t => /[RrJT]/.test(t));
+    if (bb && !bb.folded && !raised && !st.acts.some(a => a.pos === "BB")) out.push("X");
+  }
   return out;
 }
+// a preflop line the flop solutions lack, mapped to the nearest one they have: a first raise to 3 BB plays like the
+// minraise pot (same positions, slightly bigger pot)
+const CB_LINE_ALT = { "3h": { "r-F-C": "R-F-C" }, hu: { "r-C": "R-C" } };
 function earlyAdvice(H, mvO) {   // mvO: multiplier of this table (table mode), else the global choice
   if (!H || H.street !== 0 || !MR || !MR.depths) return null;
   const game = H.n === 2 ? "hu" : H.n === 3 ? "3h" : null; if (!game) return null;
@@ -5004,9 +5034,11 @@ function earlyAdvice(H, mvO) {   // mvO: multiplier of this table (table mode), 
   const n = fd.n, line = lineText(game, path), spot = (EARLY_SPOTS[game] || []).find(x => x.path === fd.path);
   const idx = H.cards ? (parseCards(H.cards) || {}).idx : null;
   const ev = earlyViewC(ctx, { path: fd.path });
-  if (ev && ev.empty) return { miss: `${line}: ${ev.empty}, darum hat er für diese Stelle keine Strategie.`, eff, S, path, game };
+  // a line the solver never takes (someone, often the hero, left GTO earlier): the node still has the solver's answer
+  // for every hand against the opponents' ranges there, so show it, marked as an estimate, instead of nothing
+  const note = ev && ev.empty ? `${line}: ${ev.empty}. Die Werte sind die Antwort des Solvers für deine Hand an dieser Stelle, eine Näherung.` : null;
   const freqs = n.acts.map((a, k) => ({ a, v: idx != null ? n.f[k][idx] : null })).filter(x => x.v == null || x.v > .005);
-  return { game, S, path: fd.path, line, alt: altTxt(fd), eff, ctx, node: n, view: ev, spot, idx, freqs, title: spot ? spot.title : `${H.heroPos} nach ${line}` };
+  return { game, S, path: fd.path, line, alt: altTxt(fd), eff, ctx, node: n, view: ev, spot, idx, freqs, note, title: spot ? spot.title : `${H.heroPos} nach ${line}` };
 }
 // open the same line and stacks in the range charts
 function chartLink(adv) { return `<a href="#charts" data-chartlink="${encodeURIComponent(JSON.stringify({ g: adv.game, m: adv.ctx.model, s: adv.ctx.stacks, p: adv.path }))}">im Chart öffnen</a>`; }
@@ -5021,40 +5053,66 @@ function cbSizeKey(to, pot, avail) {
   for (const k of avail) if (amt[k] != null) { const d = Math.abs(Math.log(Math.max(.1, to || 0) / amt[k])); if (d < bd) { bd = d; best = k; } }
   return best;
 }
-const CB_SIZE_TXT = { bmin: "Min-Bet", b33: "Bet 33 %", b66: "Bet 66 %" };
+const CB_SIZE_TXT = { bmin: "Min-Bet", b33: "Bet 33 %", b66: "Bet 66 %" }, CB_SIZE_PCT = { bmin: 1, b33: 33, b66: 66 };
 // solved flop spot for this hand: same preflop line, nearest depth
 function cbSpot(H) {
   if (!CB || !CB.spots) return null;
-  const line = spinLine(H).join("-"), game = H.n === 2 ? "hu" : "3h", eff = ctEff(H);
-  const c = CB.spots.filter(s => s.game === game && (s.lines || [s.line]).includes(line)); if (!c.length) return null;
-  return c.reduce((b, s) => Math.abs(s.S - eff) < Math.abs(b.S - eff) ? s : b, c[0]);
+  const game = H.n === 2 ? "hu" : "3h", eff = ctEff(H), real = spinLine(H, true).join("-");
+  const find = line => CB.spots.filter(s => s.game === game && (s.lines || [s.line]).includes(line));
+  let c = find(real), alt = null;
+  if (!c.length && CB_LINE_ALT[game][real]) { alt = CB_LINE_ALT[game][real]; c = find(alt); }
+  if (!c.length) return null;
+  const sp = c.reduce((b, s) => Math.abs(s.S - eff) < Math.abs(b.S - eff) ? s : b, c[0]);
+  return alt ? Object.assign({}, sp, { altFrom: real }) : sp;
 }
 function cbAdvice(H) {
   if (!H || H.street !== 1) return null;
   const sp = cbSpot(H); if (!sp) return null;
   const board = (H.streets[1].board || []).slice(0, 3).map(pfCard); if (board.length < 3 || board.some(c => c < 0)) return { sp, miss: "Flop nicht sicher erkannt" };
   const keys = Object.keys(sp.flops), nn = LF.nearest(board, new Set(keys)); if (!nn) return null;
-  const F = sp.flops[nn.key], acts = H.streets[1].acts.filter(a => !a.est || a.t === "check"), heroIP = H.heroPos === sp.ip, pot = H.streets[1].pot || sp.pot;
+  const F = sp.flops[nn.key], heroIP = H.heroPos === sp.ip, pot = H.streets[1].pot || sp.pot;
   const avail = pre => Object.keys(F).filter(k => k.startsWith(pre) && k.length > pre.length).map(k => "b" + k.slice(pre.length));
+  // the flop line from the bets alone: a check shows nothing on the picture (no chips move), so "no bet yet" is a check
+  // by whoever acted before the hero
+  const bets = H.streets[1].acts.filter(a => !a.est && (a.t === "bet" || a.t === "raise") && a.pos !== H.heroPos);
+  const own = H.streets[1].acts.filter(a => !a.est && (a.t === "bet" || a.t === "raise") && a.pos === H.heroPos);
   const limp = !sp.aggr, raiserIP = sp.aggr === "ip";
-  let node = null, title = "", label = "";
-  if (!heroIP && acts.length === 0 && F.lead) { node = F.lead; title = limp ? `${sp.oopName}: Bet im Limp-Pot` : `${sp.oopName}: C-Bet out of position`; label = limp ? "Bet oder Check" : "C-Bet"; }
-  else if (heroIP && acts.length === 1 && acts[0].t === "check") { node = F.cbet; title = raiserIP ? `${sp.ipName}: C-Bet nach dem Check` : limp ? `${sp.ipName}: Bet nach Check im Limp-Pot` : `${sp.ipName}: Bet, nachdem der Raiser checkt`; label = raiserIP ? "C-Bet" : "Bet nach Check"; }
-  else if (heroIP && acts.length === 1 && acts[0].t === "bet" && !acts[0].allin) { const k = cbSizeKey(acts[0].to, pot, avail("vsl").map(x => "b" + x.slice(1))); if (k) { node = F["vsl" + k.slice(1)]; title = `${sp.ipName} gegen ${CB_SIZE_TXT[k]}`; label = `gegen ${CB_SIZE_TXT[k]}`; } }
-  else if (!heroIP && acts.length === 2 && acts[0].t === "check" && acts[1].t === "bet" && !acts[1].allin) {
-    if (F.vsbet) { node = F.vsbet; title = `${sp.oopName} gegen Min-Bet`; label = "gegen Min-Bet"; }
-    else { const k = cbSizeKey(acts[1].to, pot, avail("vsb").map(x => "b" + x.slice(1))); if (k) { node = F["vs" + k]; title = `${sp.oopName} gegen ${CB_SIZE_TXT[k]}`; label = `gegen ${CB_SIZE_TXT[k]}`; } }
+  const sizeOf = (a, keys) => a.allin ? keys.sort((x, y) => (CB_SIZE_PCT[y] || 0) - (CB_SIZE_PCT[x] || 0))[0] : cbSizeKey(a.to, pot, keys);   // an all-in: the biggest solved bet
+  let node = null, title = "", label = "", note = "";
+  if (own.length) node = null;   // the hero bet and was raised: not in the solved tree
+  else if (!heroIP && bets.length === 0) {
+    if (F.lead) { node = F.lead; title = limp ? `${sp.oopName}: Bet im Limp-Pot` : `${sp.oopName}: C-Bet out of position`; label = limp ? "Bet oder Check" : "C-Bet"; }
+    else { node = { acts: ["check"], f: null }; title = `${sp.oopName}: Check zum Raiser`; label = "Check"; note = "Im gerechneten Baum checkt hier jede Hand zum Raiser."; }
   }
-  if (!node) return { sp, miss: "Für diese Stelle gibt es keine gerechnete Strategie." };
+  else if (heroIP && bets.length === 0) { node = F.cbet; title = raiserIP ? `${sp.ipName}: C-Bet nach dem Check` : limp ? `${sp.ipName}: Bet nach Check im Limp-Pot` : `${sp.ipName}: Bet, nachdem der Raiser checkt`; label = raiserIP ? "C-Bet" : "Bet nach Check"; }
+  else if (heroIP && bets.length === 1 && !avail("vsl").length) {   // a donk bet the tree does not have: the answer to a bet of the same size from the other side
+    const keys = avail("vsb").map(x => "b" + x.slice(1)), k = sizeOf(bets[0], keys);
+    if (k) { node = F["vs" + k]; title = `${sp.ipName} gegen Donk-Bet`; label = "gegen Donk-Bet"; note = `Ein Bet out of position (Donk) kommt im gerechneten Baum nicht vor: genähert mit der Antwort auf ${bets[0].allin ? "ein All-in" : "eine Bet"} gleicher Größe (${CB_SIZE_TXT[k]}).`; }
+  }
+  else if (heroIP && bets.length === 1) { const keys = avail("vsl").map(x => "b" + x.slice(1)), k = sizeOf(bets[0], keys); if (k) { node = F["vsl" + k.slice(1)]; title = `${sp.ipName} gegen ${bets[0].allin ? "All-in" : CB_SIZE_TXT[k]}`; label = title.slice(sp.ipName.length + 1); if (bets[0].allin) note = `Ein All-in ist am Flop nicht gerechnet: genähert mit der größten Größe (${CB_SIZE_TXT[k]}), „All-in“ dort heißt Call.`; } }
+  else if (!heroIP && bets.length === 1) {
+    if (F.vsbet && !bets[0].allin) { node = F.vsbet; title = `${sp.oopName} gegen Min-Bet`; label = "gegen Min-Bet"; }
+    else { const keys = avail("vsb").map(x => "b" + x.slice(1)), k = sizeOf(bets[0], keys); if (k) { node = F["vs" + k]; title = `${sp.oopName} gegen ${bets[0].allin ? "All-in" : CB_SIZE_TXT[k]}`; label = title.slice(sp.oopName.length + 1); if (bets[0].allin) note = `Ein All-in ist am Flop nicht gerechnet: genähert mit der größten Größe (${CB_SIZE_TXT[k]}), „All-in“ dort heißt Call.`; } }
+  }
+  if (sp.altFrom) note = (note ? note + " " : "") + `Die Linie ${sp.altFrom} ist nicht gerechnet: genähert mit ${sp.line}.`;
+  if (!node) return { sp, miss: own.length ? "Du hast gesetzt und wurdest erhöht: das ist im gerechneten Baum nicht enthalten." : "Für diese Stelle gibt es keine gerechnete Strategie." };
   const m = LF.mapper(board, nn.key), cp = parseCards(H.cards);
   const dec = b => { const s = atob(b), o = new Float32Array(169); for (let i = 0; i < 169; i++) o[i] = s.charCodeAt(i) / 100; return o; };
-  const f = node.f.map(dec);
+  const f = node.f ? node.f.map(dec) : [new Float32Array(169).fill(1)];
   let idx = null; if (cp) { const pc = cp.cs.map(c => "23456789TJQKA".indexOf(c.r) * 4 + "cdhs".indexOf(c.s)), mc = m ? m.combo(pc[0], pc[1]) : null;
     idx = mc ? (() => { const a = mc[0], b = mc[1], ra = 12 - (a >> 2), rb = 12 - (b >> 2), hi = Math.min(ra, rb), lo = Math.max(ra, rb); return hi === lo ? hi * 13 + hi : (a & 3) === (b & 3) ? hi * 13 + lo : lo * 13 + hi; })() : cp.idx; }
+  // the hero's hand class is not in the range at this point (the solver would have played it differently earlier): take
+  // the most similar class that is, instead of showing 0 % everywhere
+  if (idx != null && f.reduce((t, x) => t + x[idx], 0) < .05) {
+    const hl = i => { const r = (i / 13) | 0, c = i % 13; return { hi: Math.min(r, c), lo: Math.max(r, c), t: r === c ? 0 : r < c ? 1 : 2 }; }, me = hl(idx);
+    let best = -1, bd = 1e9;
+    for (let i = 0; i < 169; i++) { if (f.reduce((t, x) => t + x[i], 0) < .5) continue; const o = hl(i), d = Math.abs(o.hi - me.hi) + Math.abs(o.lo - me.lo) + (o.t !== me.t ? 1.5 : 0); if (d < bd) { bd = d; best = i; } }
+    if (best >= 0) { note = (note ? note + " " : "") + `${handName(idx)} ist hier laut Solver nicht in der Range (er hätte die Hand vorher anders gespielt): genähert mit ${handName(best)}.`; idx = best; }
+  }
   // the flop solutions are stored per hand class (AKs, 76o, …), so the suits are averaged out: say so when the hero's suits matter
   let suit = null; if (cp) { const hs = cp.cs.map(c => "cdhs".indexOf(c.s)); for (let s = 0; s < 4; s++) { const nb = board.filter(c => (c & 3) === s).length, nh = hs.filter(x => x === s).length;
     if (nb === 3 && nh === 2) suit = "Flush"; else if ((nb === 2 && nh === 2) || (nb === 3 && nh === 1)) suit = suit || "Flush Draw"; } }
-  return { sp, key: nn.key, exact: nn.exact, node, f, idx, real: cp ? cp.idx : null, acts: node.acts, ip: heroIP, title, label, pot, suit };
+  return { sp, key: nn.key, exact: nn.exact, node, f, idx, real: cp ? cp.idx : null, acts: node.acts, ip: heroIP, title, label, pot, suit, note };
 }
 // ---- four-field review ----
 function quadData(i) {
@@ -5086,7 +5144,7 @@ function quadField(i) {
     else if (adv && adv.pending) rng = `<p class="muted">${adv.msg}</p>`;
     else if (adv && adv.view) rng = quadRange(adv.title, `${adv.line} · ${fmt(adv.S)} BB · Solver${H.heroTurn ? "" : " · letzte Entscheidung"} · ${chartLink(adv)}`, adv.view.layers, adv.view.rest, adv.idx, adv.freqs.map(x => `${EARLY_LABEL[x.a] || x.a} ${x.v == null ? "" : Math.round(x.v * 100) + " %"}`).join(" · "), null, adv.view.inR);
     else if (adv && adv.f) { const layers = []; adv.acts.forEach((a, k) => { const m = CB_LAYER[a]; if (m) layers.push([m, adv.f[k]]); });
-      rng = quadRange(`Flop: ${adv.title}`, `${fmt(adv.sp.S)} BB · Flop ${adv.exact ? "" : "≈ "}${adv.key.replace(/(..)(?=.)/g, "$1 ")}`, layers, adv.acts.includes("check") ? "Check" : "Fold", adv.idx, adv.idx != null ? adv.acts.map((a, k) => `${CB_LABEL[a] || a} ${Math.round(adv.f[k][adv.idx] * 100)} %`).join(" · ") + (adv.suit ? ` · ohne Farben gerechnet: dein ${adv.suit} ist nicht berücksichtigt` : "") : "", cbLabel(adv)); }
+      rng = quadRange(`Flop: ${adv.title}`, `${fmt(adv.sp.S)} BB · Flop ${adv.exact ? "" : "≈ "}${adv.key.replace(/(..)(?=.)/g, "$1 ")}`, layers, adv.acts.includes("check") ? "Check" : "Fold", adv.idx, adv.idx != null ? adv.acts.map((a, k) => `${CB_LABEL[a] || a} ${Math.round(adv.f[k][adv.idx] * 100)} %`).join(" · ") + (adv.suit ? ` · ohne Farben gerechnet: dein ${adv.suit} ist nicht berücksichtigt` : "") : "", cbLabel(adv)) + (adv.note ? `<p class="muted">${adv.note}</p>` : ""); }
     if (rng && !H.heroTurn && q.sp && adv === q.sp.early) { const evq = earlyVerdict(q.sp); if (evq) rng += `<p class="qf-freq"><span class="${evq.cls}">Gespielt: ${evq.played} · ${evq.txt}</span></p>`; }
     else if (adv && adv.pushfold) rng = `<p class="muted">Unter ${String(adv.lim).replace(".", ",")} BB: Push/Fold. Die Auswertung steht im großen Feld.</p>`;
     else if (adv && adv.miss) rng = `<p class="muted">${adv.miss === true ? `Linie ${adv.path || "first-in"} ist nicht im Solver-Baum.` : adv.miss}</p>`;
@@ -5101,7 +5159,7 @@ function quadRange(title, sub, layers, rest, idx, freqTxt, label, inR) {
   layers = purify(layers); if (idx != null) freqTxt = inR && !inR[idx] ? "kommt laut Solver nicht hierher (die Aktion davor spielt er mit dieser Hand nicht)" : pureAct(layers, idx, rest);   // one action per hand, no frequencies
   const v = { layers, cev: null };
   let g = "";
-  for (let k = 0; k < 169; k++) { const [bg, fg] = cellStyle(v, k, false); g += `<div class="mcell${k === idx ? " hero" : ""}${inR && !inR[k] ? " out" : ""}" style="background:${bg};color:${fg}">${handName(k)}</div>`; }
+  for (let k = 0; k < 169; k++) { const [bg, fg] = layers.length ? cellStyle(v, k, false) : ["var(--cell)", "var(--cell-ink)"]; /* only the rest action, e.g. check to the raiser */ g += `<div class="mcell${k === idx ? " hero" : ""}${inR && !inR[k] ? " out" : ""}" style="background:${bg};color:${fg}">${handName(k)}</div>`; }
   const leg = layers.map(([a]) => `<span><i class="sw" style="background:${ACT[a].color}"></i>${ACT[a].label}</span>`).join("") + `<span><i class="sw" style="background:var(--cell)"></i>${rest}</span>`;
   return `<div class="qf-range"><div class="qf-rt"><b>${title}</b><span class="muted">${sub}</span></div><div class="mgrid">${g}</div><div class="legend small">${leg}</div>${freqTxt ? `<p class="qf-freq">${idx != null ? `<b>${label || handName(idx)}</b>: ` : ""}${freqTxt}</p>` : ""}</div>`;
 }
@@ -5180,6 +5238,7 @@ function spinPostHtml(sp) {
   h += `<div class="vp-meta"><span class="cardsview">${cp ? cardsHtml(cp.cs) : ""}</span><span class="cardsview">${boardHtml(H.streets[1].board)}</span><span>${H.heroPos}</span><span>Pot ${CBB(H.streets[1].pot)} BB</span></div>`;
   h += quadRange(a.title || (H.heroPos === a.sp.ip ? `${a.sp.ipName}: C-Bet` : `${a.sp.oopName} gegen Bet`), `${fmt(a.sp.S)} BB · ${a.exact ? "genau dieser Flop" : "ähnlichster gerechneter Flop " + a.key.replace(/(..)(?=.)/g, "$1 ")}`, layers, a.acts.includes("check") ? "Check" : "Fold", a.idx,
     a.idx != null ? a.acts.map((x, k) => `${CB_LABEL[x]} ${Math.round(a.f[k][a.idx] * 100)} %`).join(" · ") : "", cbLabel(a));
+  if (a.note) h += `<p class="muted">${a.note}</p>`;
   if (v) h += `<div class="vp-verdict ${v.cls === "okp" ? "good" : v.cls === "warnp" ? "mixed" : "bad"}"><b>Gespielt: ${v.played}</b><span>${v.txt}</span></div>`;
   h += cashLineHtml(ctStreets(H), H.heroPos);
   return h;
@@ -5583,12 +5642,15 @@ function sptPump() {
     finally { SPT.running = null; sptRefresh(); sptPump(); }
   })();
 }
-function sptRefresh() { try { if (typeof tmRender === "function") tmRender(true); renderQuad(true); if (vr.cur && vr.cur.SH) renderVPanel(vr.cur); } catch (e) {} }
+function sptRefresh() { try { if (typeof tmRender === "function") tmRender(true); renderQuad(true); if (vr.cur && vr.cur.SH) renderVPanel(vr.cur); for (const x of vr.spots) if (x.spinTR && !SPT.res.has(x.akey) && x.SH.sptJob && x.SH.sptJob === SPT.resident) sptAdvice(x.SH, x);
+  if (vr.spots.some(x => x.spinTR)) renderTimeline(); } catch (e) {} }
 const SPT_LAYER = (c, pot) => c.type === 2 ? "call" : c.type === 5 || c.type === 4 ? "push" : c.type === 3 ? (c.amt / pot <= .45 ? "b33" : "b66") : null;
 // the hero's turn or river decision: range layers, his hand, the action labels (null while the tree is being solved)
-function sptAdvice(H) {
-  if (!H || H.street < 2 || !H.heroTurn) return null;
-  const key = `${H.id}|${H.street}|${H.streets[H.street].acts.length}`; if (SPT.res.has(key)) return SPT.res.get(key);
+// fx: a stored decision (main panel): its street, key and the actions up to it, so the solve that finishes after the hero
+// has acted (the video runs on) is still read at the right point
+function sptAdvice(H, fx) {
+  if (!H || (!fx && (H.street < 2 || !H.heroTurn))) return null;
+  const street = fx ? fx.street : H.street, key = fx ? fx.akey : `${H.id}|${H.street}|${H.streets[H.street].acts.length}`; if (SPT.res.has(key)) return SPT.res.get(key);
   const job = sptJob(H); if (!job) return { pending: true, msg: "wartet auf die Turn-Karte" };
   if (job.status === "skip") return { miss: job.msg };
   if (job.status === "evicted") { job.status = "wait"; SPT.queue.push(job); sptPump(); }
@@ -5596,7 +5658,7 @@ function sptAdvice(H) {
   if (!job.reading) { job.reading = true;
     (async () => {
       try {
-        const snap = H.streets.slice(2, H.street + 1).map(x => ({ acts: x.acts.filter(a => !a.est || a.t === "check").map(a => Object.assign({}, a)), board: x.board.slice() }));
+        const snap = (fx ? fx.snap : H.streets.slice(2, H.street + 1).map(x => ({ acts: x.acts.filter(a => !a.est || a.t === "check").map(a => Object.assign({}, a)), board: x.board.slice() })));
         const path = await lvPath(job, snap); if (path.fail) { SPT.res.set(key, { miss: path.fail }); return; }
         const hp = H.heroPos === job.oopPos ? 0 : 1; let n = await lvNode(job, path.node);
         if (n.type === 0 && n.player !== hp) { const ck = n.children.findIndex(c => c.type === 1); if (ck >= 0) { path.node = n.children[ck].node; n = await lvNode(job, path.node); } }
@@ -5614,11 +5676,24 @@ function sptAdvice(H) {
         const cnt = new Float32Array(169); for (let h = 0; h < NHp; h++) cnt[pfClassOf(hc[2 * h], hc[2 * h + 1])]++;
         let mx = 0; for (let i = 0; i < 169; i++) if (cnt[i]) mx = Math.max(mx, tot[i] / cnt[i]);
         const inR = Array.from({ length: 169 }, (_, i) => cnt[i] > 0 && tot[i] / cnt[i] > .03 * mx);
-        SPT.res.set(key, { inR, layers, rest: n.children.some(c => c.type === 1) ? "Check" : "Fold", idx, hero: heroLab, title: `${H.street === 2 ? "Turn" : "River"} · ${H.heroPos} ${hp ? "in Position" : "out of position"}`, exact: job.exact, pot, expl: job.expl });
+        SPT.res.set(key, { inR, layers, rest: n.children.some(c => c.type === 1) ? "Check" : "Fold", idx, hero: heroLab, title: `${street === 2 ? "Turn" : "River"} · ${H.heroPos} ${hp ? "in Position" : "out of position"}`, exact: job.exact, pot, expl: job.expl });
       } catch (e) { SPT.res.set(key, { miss: "Turn/River-Auswertung fehlgeschlagen." }); }
       finally { job.reading = false; sptRefresh(); }
     })(); }
   return { pending: true, msg: "liest die Lösung …" };
+}
+
+// the main panel for a turn or river decision: the live solve's result once it is there (sptRefresh renders again)
+function spinTRHtml(sp) {
+  const H = sp.SH, cp = parseCards(sp.cards || ""), name = sp.street === 2 ? "Turn" : "River";
+  const a = SPT.res.get(sp.akey) || sptAdvice(H, sp);
+  let h = `<div class="vp-head"><span class="vp-time">${mtTag(sp)}${tFmt(sp.t)}</span><span class="vp-spot">${name}</span></div>`;
+  h += `<div class="vp-meta"><span class="cardsview">${cp ? cardsHtml(cp.cs) : ""}</span><span class="cardsview">${boardHtml(H.streets[sp.street].board)}</span><span>${H.heroPos}</span><span>Pot ${CBB(H.streets[sp.street].pot)} BB</span></div>`;
+  if (!a || a.pending) h += `<p class="muted">${a && a.msg ? a.msg : "Turn und River werden auf diesem Gerät gerechnet …"}</p>`;
+  else if (a.miss) h += `<p class="muted">${a.miss}</p>`;
+  else if (a.layers) h += quadRange(a.title, `live gelöst${a.exact ? "" : " · Flop genähert"}`, a.layers, a.rest, a.idx, a.hero ? a.hero.label : "");
+  h += cashLineHtml(ctStreets(H), H.heroPos);
+  return h;
 }
 
 // ================= Flop library: flop classes, order, similarity =================
