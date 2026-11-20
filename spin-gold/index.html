@@ -529,7 +529,17 @@ body.tm-on { overflow: hidden; }
         <li>Am PC die fertige Aufnahme abspielen, in normalem Tempo. Die App wertet nur abgespielte Aufnahmen aus, nie ein laufendes Spiel.</li>
         <li><b>Beenden</b> oben rechts schaltet die Aufnahme aus und sichert die Hände.</li>
       </ol>
-      <p>Beim ersten Start fragt das iPad nach der Kamera: erlauben. Hängen Kamera und Capture-Stick beide am iPad, erscheint oben im Tisch-Modus ein Menü zum Umschalten. Die Wahl bleibt gespeichert.</p>
+      <p>Beim ersten Start fragt das iPad nach der Kamera: erlauben. Ist kein Capture-Stick dran, bleibt die iPad-Kamera aus, und oben steht „Kein Capture-Stick gefunden“. Sobald der Stick steckt, startet die Aufnahme von selbst. Über das Menü oben lässt sich eine iPad-Kamera auch von Hand wählen.</p>
+    </article>
+    <article>
+      <h2>Wenn der Stick nicht erkannt wird</h2>
+      <p>Das Menü oben im Tisch-Modus zeigt alle Kameras, die das iPad meldet. Stehen dort nur Front- und Rückkameras, sieht das iPad den Stick nicht.</p>
+      <ul>
+        <li>Das iPad hat nur einen USB-C-Anschluss. Steckt dort das Ladekabel, ist der Stick ab. Zum Laden während der Session einen USB-C-Hub mit Strom-Durchleitung (PD) nehmen: Netzteil an den Hub, Stick an den Hub.</li>
+        <li>Manche Sticks brauchen mehr Strom, als das iPad allein liefert. Dann ebenfalls über einen Hub mit Netzteil.</li>
+        <li>Externe Kameras gehen erst ab iPadOS 17.</li>
+        <li>Erscheint der Stick nach dem Einstecken nicht, die App einmal ganz schließen (nach oben wischen) und neu öffnen.</li>
+      </ul>
     </article>
     <article>
       <h2>Der Tisch-Modus</h2>
@@ -5481,19 +5491,35 @@ function tmOpen() { $("tmode").hidden = false; document.body.classList.add("tm-o
 function tmHHLabel() { const s = typeof hsState === "function" ? hsState() : { text: "" }, b = $("tmHH"); b.textContent = s.text; b.classList.toggle("warn", !!s.warn); }
 async function tmStart() {
   $("tmGo").disabled = true; $("tmState").textContent = "Starte Aufnahme …";
-  mt.mode = "auto"; vr.tables = []; TM.thumbs = []; TM.cache = []; TM.on = true; TM.pick = false;   // the windows are found on the PC picture
+  mt.mode = "auto"; vr.tables = []; TM.thumbs = []; TM.cache = []; TM.on = true; TM.pick = false; TM.noStick = false; clearTimeout(TM.stickT);   // the windows are found on the PC picture
   const ok = await camStart();
   $("tmGo").disabled = false;
   if (!ok) { TM.on = false; $("tmState").textContent = $("vDropNote").textContent || "Die Aufnahme startet nicht."; return; }
+  // only the iPad's own cameras: they would film the desk. Wait for the capture stick instead (an iPad camera
+  // picked by hand in the menu still runs)
+  if (!vr.camStick && !vr.camByHand) {
+    try { TM.camCount = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput").length; } catch (e) { TM.camCount = 0; }
+    stopStream(); try { vid.pause(); vid.srcObject = null; } catch (e) {}
+    $("tmCam").hidden = true; TM.noStick = true; tmStickWait(); tmRender(true); return;
+  }
   $("tmGo").hidden = true; $("tmVid").hidden = true;
   // the picture stays visible (small) in the bar: Safari delivers no frames of a video in a hidden view
   $("tmCam").appendChild(vid); $("tmCam").hidden = false; vid.play().catch(() => {});
   tmWake(); tmRender(true);
 }
+// waiting for the capture stick: a new camera (more than before) starts the recording; labels can be hidden
+// while nothing records, so the count decides
+async function tmStickCheck() {
+  if (!TM.on || !TM.noStick) return false;
+  try { const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+    if (TM.on && TM.noStick && (ds.length > TM.camCount || ds.some(d => camIsStick(d.label)))) { tmStart(); return true; } } catch (e) {}
+  return false;
+}
+function tmStickWait() { clearTimeout(TM.stickT); if (!TM.on || !TM.noStick) return; TM.stickT = setTimeout(async () => { if (!(await tmStickCheck())) tmStickWait(); }, 2000); }
 // test with a recording: pick a video file, it plays here and the four fields fill as it would with the capture stick
 function tmVideo() { TM.pick = true; $("vInput").click(); }
 function tmVideoLoaded() {
-  TM.pick = false; mt.mode = "auto"; vr.tables = []; TM.thumbs = []; TM.cache = []; TM.on = true; $("tmCam").hidden = true;
+  TM.pick = false; mt.mode = "auto"; vr.tables = []; TM.thumbs = []; TM.cache = []; TM.on = true; TM.noStick = false; clearTimeout(TM.stickT); $("tmCam").hidden = true;
   $("vPause").checked = false;   // four tables: no stop at every decision
   $("tmGo").hidden = true; $("tmVid").hidden = true; $("tmVc").hidden = false; $("tmPlay").textContent = "Pause";
   $("tmPrev").appendChild(vid);   // the video stays visible (small): Safari does not draw the frames of a hidden video reliably
@@ -5517,7 +5543,7 @@ $("tmSeek").addEventListener("input", () => { TM.seeking = true; const d = vid.d
 $("tmSeek").addEventListener("change", () => { TM.seeking = false; vr.tables = []; TM.thumbs = []; TM.cache = []; tmRender(true); });   // after a jump the hands start over
 function tmEnd() {
   if (typeof hhFlush === "function") { hhFlush(); hsPush(true); }
-  TM.on = false; TM.pick = false; $("tmode").hidden = true; document.body.classList.remove("tm-on"); $("tmGo").hidden = false; $("tmVid").hidden = false; $("tmVc").hidden = true; $("tmCam").hidden = true;
+  TM.on = false; TM.pick = false; TM.noStick = false; clearTimeout(TM.stickT); $("tmode").hidden = true; document.body.classList.remove("tm-on"); $("tmGo").hidden = false; $("tmVid").hidden = false; $("tmVc").hidden = true; $("tmCam").hidden = true;
   if (!vr.cam) try { vid.pause(); } catch (e) {}
   if (vid.parentNode !== $("vBox")) $("vBox").insertBefore(vid, $("vBox").firstChild);
   try { if (TM.lock) TM.lock.release(); } catch (e) {} TM.lock = null;
@@ -5599,7 +5625,8 @@ function tmRender(force) {
   $("tmGrid").querySelectorAll("[data-tmm]").forEach(b => b.onclick = () => { const T = mtTableState(+b.dataset.tmm), k = TM_MULTI.findIndex(m => m[0] === (T.multi || "2"));
     // tapping cycles the hand-set ranges; after the last one it goes back to the read value
     T.multi = T.multi && k === TM_MULTI.length - 1 && T.multiAuto ? null : TM_MULTI[(k + 1) % TM_MULTI.length][0]; tmRender(true); });
-  if (TM.on) $("tmState").textContent = `${vr.cam && vr.camLabel != null ? (vr.camStick ? "Capture-Stick" : "iPad-Kamera (kein Capture-Stick gefunden)") + " · " : ""}${vr.tables.filter(T => T && T.sh).length} Tische mit Hand · Lesezeit ${Math.round(TM.ms)} ms pro Bild${TM.ocr ? "" : TM.ocrLoad ? " · Namen werden geladen" : ""}`;
+  if (TM.on && TM.noStick) $("tmState").textContent = "Kein Capture-Stick gefunden. Einstecken, die Aufnahme startet dann von selbst.";
+  else if (TM.on) $("tmState").textContent = `${vr.cam && vr.camLabel != null ? (vr.camStick ? "Capture-Stick" : "iPad-Kamera (kein Capture-Stick gefunden)") + " · " : ""}${vr.tables.filter(T => T && T.sh).length} Tische mit Hand · Lesezeit ${Math.round(TM.ms)} ms pro Bild${TM.ocr ? "" : TM.ocrLoad ? " · Namen werden geladen" : ""}`;
 }
 function tmRangeLayers(adv, pre) {
   // preflop advice (a solver node view) or a flop c-bet strategy (acts + frequencies); after the flop the last
@@ -5612,7 +5639,7 @@ function tmField(i) {
   const T = vr.tables[i], q = quadData(i), mlt = mtMulti(T) || "2", auto = T && !T.multi && T.multiAuto;
   const mLab = auto ? (mlt === "jp" ? "JP" : "x" + mlt) : (TM_MULTI.find(m => m[0] === mlt) || TM_MULTI[0])[1];
   const head = (extra) => `<div class="tmf-head"><b>Tisch ${i + 1}</b><button type="button" class="tm-multi" data-tmm="${i}" title="Multiplikator dieses Tisches">${mLab}</button>${extra || ""}</div>`;
-  if (!q || !q.H) return `<div class="tmf idle">${head(`<span class="muted">${!TM.on ? "wartet" : T && T.game === "spin" ? "Tisch erkannt · wartet auf die nächste Hand" : "kein Tisch erkannt"}</span>`)}</div>`;
+  if (!q || !q.H) return `<div class="tmf idle">${head(`<span class="muted">${!TM.on ? "wartet" : TM.noStick ? "wartet auf den Capture-Stick" : T && T.game === "spin" ? "Tisch erkannt · wartet auf die nächste Hand" : "kein Tisch erkannt"}</span>`)}</div>`;
   if (q.game === "cash") return `<div class="tmf idle">${head(`<span class="muted">Rush &amp; Cash: kommt später</span>`)}</div>`;
   const H = q.H, sp = q.sp && !q.sp.cash && q.sp.SH === H ? q.sp : null, cp = parseCards(H.cards), pre = H.street === 0;
   // the hero's decision: current one when it is his turn, otherwise the last one of this hand
@@ -5676,6 +5703,7 @@ $("goBtn").addEventListener("click", () => { tmOpen(); tmStart(); });
 $("tmCamSel").addEventListener("change", () => { try { localStorage.setItem("sg-cam", $("tmCamSel").value); } catch (e) {} vr.camByHand = true; if (TM.on) { stopStream(); tmStart(); } });
 // a capture stick plugged in while the table mode runs on an iPad camera: switch to it
 if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", async () => {
+  if (TM.on && TM.noStick) { tmStickCheck(); return; }
   if (!TM.on || !vr.cam || vr.camLabel == null || vr.camStick || vr.camByHand) return;
   try { const ds = await navigator.mediaDevices.enumerateDevices(); if (ds.some(d => d.kind === "videoinput" && camIsStick(d.label))) { stopStream(); tmStart(); } } catch (e) {}
 });
