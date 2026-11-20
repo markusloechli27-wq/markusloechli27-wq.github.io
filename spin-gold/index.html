@@ -643,7 +643,7 @@ body.tm-on { overflow: hidden; }
   </section>
 
   <section class="tmode" id="tmode" hidden aria-label="Tisch-Modus">
-    <div class="tm-bar"><b>Tisch-Modus</b><span id="tmState" class="muted">Capture-Stick anschließen und „Aufnahme starten“, oder mit „Video hochladen“ eine Aufnahme testen. Links oben hier = Tisch links oben am PC.</span>
+    <div class="tm-bar"><b>Tisch-Modus</b><span class="tm-prev" id="tmCam" hidden></span><span id="tmState" class="muted">Capture-Stick anschließen und „Aufnahme starten“, oder mit „Video hochladen“ eine Aufnahme testen. Links oben hier = Tisch links oben am PC.</span>
       <span class="tm-vc" id="tmVc" hidden><span class="tm-prev" id="tmPrev"></span><button class="btn" type="button" id="tmPlay">Pause</button><input type="range" id="tmSeek" min="0" max="1000" value="0" aria-label="Stelle im Video"><span class="mono" id="tmTime">0:00</span></span>
       <select id="tmCamSel" class="camsel" hidden aria-label="Kamera oder Capture-Stick wählen"></select><button class="btn primary" type="button" id="tmGo">Aufnahme starten</button><button class="btn" type="button" id="tmVid">Video hochladen</button><button class="btn" type="button" id="tmHH" title="Die Hände gehen von selbst in dein privates GitHub-Repo. Tippen: einrichten oder sofort senden">Hände-Sicherung</button><button class="btn" type="button" id="tmEnd">Beenden</button></div>
     <div class="tm-grid" id="tmGrid"></div>
@@ -3182,10 +3182,13 @@ async function camList(cur) {
     }
   } catch (e) {}
 }
-$("vCamSel").addEventListener("change", () => { try { localStorage.setItem("sg-cam", $("vCamSel").value); } catch (e) {} $("vCamBtn").click(); });
+$("vCamSel").addEventListener("change", () => { try { localStorage.setItem("sg-cam", $("vCamSel").value); } catch (e) {} vr.camByHand = true; $("vCamBtn").click(); });
 // camera
-function stopStream() { if (vr.stream) { vr.stream.getTracks().forEach(tr => tr.stop()); vr.stream = null; } vr.cam = false; vr.remote = false; }
+function stopStream() { if (vr.stream) { vr.stream.getTracks().forEach(tr => tr.stop()); vr.stream = null; } vr.cam = false; vr.remote = false; vr.camLabel = null; vr.camStick = false; }
 $("vCamBtn").addEventListener("click", () => camStart());
+// a capture stick: named like one, or (iPad only) any camera that is not one of the iPad's own cameras
+const CAM_OWN = /back|front|rück|vorder|dual|triple|ultra|tele|weitwinkel|wide|facetime|lidar|true ?depth|desk ?view|schreibtisch|iphone|ipad/i;
+function camIsStick(lab) { lab = lab || ""; return !!lab && !CAM_OWN.test(lab) || /usb|capture|hdmi|uvc|cam ?link|grabber|ms21|elgato/i.test(lab); }
 async function camStart() {
   try {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw { name: "NoApi" };
@@ -3194,12 +3197,18 @@ async function camStart() {
     const size = { width: { ideal: 3840 }, height: { ideal: 2160 } };
     let st; try { st = await navigator.mediaDevices.getUserMedia({ video: Object.assign(want ? { deviceId: { exact: want } } : { facingMode: { ideal: "environment" } }, size), audio: false }); }
     catch (e) { if (!want) throw e; st = await navigator.mediaDevices.getUserMedia({ video: Object.assign({ facingMode: { ideal: "environment" } }, size), audio: false }); }   // chosen camera is gone
+    // the capture stick first: after the first permission the labels are known, so switch to the stick when the
+    // saved choice is gone or was never made (a camera picked by hand in this session stays)
+    if (!camIsStick(st.getVideoTracks()[0].label) && !vr.camByHand) try {
+      const stick = (await navigator.mediaDevices.enumerateDevices()).find(d => d.kind === "videoinput" && camIsStick(d.label));
+      if (stick) { st.getTracks().forEach(t => t.stop()); st = await navigator.mediaDevices.getUserMedia({ video: Object.assign({ deviceId: { exact: stick.deviceId } }, size), audio: false }); try { localStorage.setItem("sg-cam", stick.deviceId); } catch (e) {} }
+    } catch (e) { if (!st.active) st = await navigator.mediaDevices.getUserMedia({ video: Object.assign({ facingMode: { ideal: "environment" } }, size), audio: false }); }
     camList((st.getVideoTracks()[0].getSettings() || {}).deviceId);
     // an HDMI capture stick delivers the PC picture pixel for pixel: no corners, no contrast fix, little averaging
-    const lab = (st.getVideoTracks()[0].label || ""), clean = /usb|capture|hdmi|uvc|cam ?link|grabber|ms21|video/i.test(lab) && !/back|front|rück|vorder|dual|triple|ultra|tele|weitwinkel|facetime/i.test(lab);
+    const lab = (st.getVideoTracks()[0].label || ""), clean = camIsStick(lab);
     // a capture stick fed with the PC's 1080p picture: ask for exactly that (sticks offer an upscaled 4K mode that only blurs)
     if (clean) try { await st.getVideoTracks()[0].applyConstraints({ width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }); } catch (e) {}
-    stopRemote(); await useStream(st, clean);
+    stopRemote(); await useStream(st, clean); vr.camLabel = lab; vr.camStick = clean;
     vLive(clean ? `Capture-Stick erkannt (${lab}). Spiel das Video am PC ab, die Auswertung läuft wie bei einer Videodatei.` : "Kamera läuft. Tippe auf „Ecken markieren“ und dann auf die vier Ecken des Tisches. Hängt ein Capture-Stick am iPad, wähl ihn im Menü daneben.", true);
     return true;
   } catch (e) {
@@ -3298,12 +3307,16 @@ function handleRead(r, t, manual) {
   const raw = r.raw;
   // game switch with a little hysteresis, so one misread seat does not flip the mode
   vr.seatHist = (vr.seatHist || []).concat(raw.seats.length).slice(-12);
-  const g = raw.game === "rush_cash" || Math.max(...vr.seatHist) >= 4 ? "cash" : "spin";
+  // cash only when most of the recent pictures show 4+ seats (an emoji or a win animation can add one seat now and
+  // then); the table mode is Spin & Gold only
+  const many = vr.seatHist.filter(n => n >= 4).length;
+  const g = document.body.classList.contains("tm-on") ? "spin" : many * 2 > vr.seatHist.length ? "cash" : "spin";
   vr.gRun = vr.gLast === g ? (vr.gRun || 0) + 1 : 1; vr.gLast = g;
   const game = !vr.game || manual || vr.gRun >= 2 ? g : vr.game;
   if (game === "cash") { if (g === "cash") cashFrame(raw, t, manual); else vLive("Läuft"); return; }
   if (g === "cash") { vLive("Läuft"); return; }
   vr.game = "spin";
+  if (raw.seats.length >= 4) { vLive("Läuft"); return; }   // a misread seat at a Spin & Gold table: skip this picture
   if (raw.game === "other") { vLive("Kein Spin & Gold (" + raw.seats.length + " Spieler)"); return; }
   const post = (raw.board || 0) >= 3;
   // resolve what the hero did at the previous decision
@@ -5472,12 +5485,15 @@ async function tmStart() {
   const ok = await camStart();
   $("tmGo").disabled = false;
   if (!ok) { TM.on = false; $("tmState").textContent = $("vDropNote").textContent || "Die Aufnahme startet nicht."; return; }
-  $("tmGo").hidden = true; $("tmVid").hidden = true; tmWake(); tmRender(true);
+  $("tmGo").hidden = true; $("tmVid").hidden = true;
+  // the picture stays visible (small) in the bar: Safari delivers no frames of a video in a hidden view
+  $("tmCam").appendChild(vid); $("tmCam").hidden = false; vid.play().catch(() => {});
+  tmWake(); tmRender(true);
 }
 // test with a recording: pick a video file, it plays here and the four fields fill as it would with the capture stick
 function tmVideo() { TM.pick = true; $("vInput").click(); }
 function tmVideoLoaded() {
-  TM.pick = false; mt.mode = "auto"; vr.tables = []; TM.thumbs = []; TM.cache = []; TM.on = true;
+  TM.pick = false; mt.mode = "auto"; vr.tables = []; TM.thumbs = []; TM.cache = []; TM.on = true; $("tmCam").hidden = true;
   $("vPause").checked = false;   // four tables: no stop at every decision
   $("tmGo").hidden = true; $("tmVid").hidden = true; $("tmVc").hidden = false; $("tmPlay").textContent = "Pause";
   $("tmPrev").appendChild(vid);   // the video stays visible (small): Safari does not draw the frames of a hidden video reliably
@@ -5501,7 +5517,7 @@ $("tmSeek").addEventListener("input", () => { TM.seeking = true; const d = vid.d
 $("tmSeek").addEventListener("change", () => { TM.seeking = false; vr.tables = []; TM.thumbs = []; TM.cache = []; tmRender(true); });   // after a jump the hands start over
 function tmEnd() {
   if (typeof hhFlush === "function") { hhFlush(); hsPush(true); }
-  TM.on = false; TM.pick = false; $("tmode").hidden = true; document.body.classList.remove("tm-on"); $("tmGo").hidden = false; $("tmVid").hidden = false; $("tmVc").hidden = true;
+  TM.on = false; TM.pick = false; $("tmode").hidden = true; document.body.classList.remove("tm-on"); $("tmGo").hidden = false; $("tmVid").hidden = false; $("tmVc").hidden = true; $("tmCam").hidden = true;
   if (!vr.cam) try { vid.pause(); } catch (e) {}
   if (vid.parentNode !== $("vBox")) $("vBox").insertBefore(vid, $("vBox").firstChild);
   try { if (TM.lock) TM.lock.release(); } catch (e) {} TM.lock = null;
@@ -5583,7 +5599,7 @@ function tmRender(force) {
   $("tmGrid").querySelectorAll("[data-tmm]").forEach(b => b.onclick = () => { const T = mtTableState(+b.dataset.tmm), k = TM_MULTI.findIndex(m => m[0] === (T.multi || "2"));
     // tapping cycles the hand-set ranges; after the last one it goes back to the read value
     T.multi = T.multi && k === TM_MULTI.length - 1 && T.multiAuto ? null : TM_MULTI[(k + 1) % TM_MULTI.length][0]; tmRender(true); });
-  if (TM.on) $("tmState").textContent = `${vr.tables.filter(T => T && T.sh).length} Tische mit Hand · Lesezeit ${Math.round(TM.ms)} ms pro Bild${TM.ocr ? "" : TM.ocrLoad ? " · Namen werden geladen" : ""}`;
+  if (TM.on) $("tmState").textContent = `${vr.cam && vr.camLabel != null ? (vr.camStick ? "Capture-Stick" : "iPad-Kamera (kein Capture-Stick gefunden)") + " · " : ""}${vr.tables.filter(T => T && T.sh).length} Tische mit Hand · Lesezeit ${Math.round(TM.ms)} ms pro Bild${TM.ocr ? "" : TM.ocrLoad ? " · Namen werden geladen" : ""}`;
 }
 function tmRangeLayers(adv, pre) {
   // preflop advice (a solver node view) or a flop c-bet strategy (acts + frequencies); after the flop the last
@@ -5596,7 +5612,7 @@ function tmField(i) {
   const T = vr.tables[i], q = quadData(i), mlt = mtMulti(T) || "2", auto = T && !T.multi && T.multiAuto;
   const mLab = auto ? (mlt === "jp" ? "JP" : "x" + mlt) : (TM_MULTI.find(m => m[0] === mlt) || TM_MULTI[0])[1];
   const head = (extra) => `<div class="tmf-head"><b>Tisch ${i + 1}</b><button type="button" class="tm-multi" data-tmm="${i}" title="Multiplikator dieses Tisches">${mLab}</button>${extra || ""}</div>`;
-  if (!q || !q.H) return `<div class="tmf idle">${head(`<span class="muted">${TM.on ? "kein Tisch erkannt" : "wartet"}</span>`)}</div>`;
+  if (!q || !q.H) return `<div class="tmf idle">${head(`<span class="muted">${!TM.on ? "wartet" : T && T.game === "spin" ? "Tisch erkannt · wartet auf die nächste Hand" : "kein Tisch erkannt"}</span>`)}</div>`;
   if (q.game === "cash") return `<div class="tmf idle">${head(`<span class="muted">Rush &amp; Cash: kommt später</span>`)}</div>`;
   const H = q.H, sp = q.sp && !q.sp.cash && q.sp.SH === H ? q.sp : null, cp = parseCards(H.cards), pre = H.street === 0;
   // the hero's decision: current one when it is his turn, otherwise the last one of this hand
@@ -5657,7 +5673,12 @@ function tmField(i) {
 $("vTmBtn").addEventListener("click", tmOpen);
 // the Start button on the first tab: table mode opens and the capture stick / camera starts in one tap
 $("goBtn").addEventListener("click", () => { tmOpen(); tmStart(); });
-$("tmCamSel").addEventListener("change", () => { try { localStorage.setItem("sg-cam", $("tmCamSel").value); } catch (e) {} if (TM.on) { stopStream(); tmStart(); } });
+$("tmCamSel").addEventListener("change", () => { try { localStorage.setItem("sg-cam", $("tmCamSel").value); } catch (e) {} vr.camByHand = true; if (TM.on) { stopStream(); tmStart(); } });
+// a capture stick plugged in while the table mode runs on an iPad camera: switch to it
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener("devicechange", async () => {
+  if (!TM.on || !vr.cam || vr.camLabel == null || vr.camStick || vr.camByHand) return;
+  try { const ds = await navigator.mediaDevices.enumerateDevices(); if (ds.some(d => d.kind === "videoinput" && camIsStick(d.label))) { stopStream(); tmStart(); } } catch (e) {}
+});
 $("tmGo").addEventListener("click", tmStart);
 $("tmVid").addEventListener("click", tmVideo);
 // the hands go up on their own; the button only shows the state, sets up the backup or sends the waiting hands right away
