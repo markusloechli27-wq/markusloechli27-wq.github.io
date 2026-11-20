@@ -190,6 +190,25 @@ tr.icm td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
 :root[data-theme="dark"] { --spade: #e6ece9; --heart: #f06a6a; --diamond: #6d9cf2; --club: #4cc483; --warn: #f0a861; --warn-soft: #3d2a17; --ok: #5ccf8d; --ok-soft: #173a26; --bad: #f2786f; --bad-soft: #42201d; }
 .views { display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
 .views .btn { font-family: var(--font-display); font-weight: 700; font-size: 21px; letter-spacing: .02em; padding: 7px 18px; }
+/* iPad only: header with the two main tabs, one big Start button, everything else under "Mehr" */
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
+header.top h1 { font-size: 40px; }
+header.top .views { border: 0; padding: 0; }
+header.top .views .btn { font-size: 22px; padding: 10px 24px; min-height: 48px; }
+.start { display: grid; place-items: center; align-content: center; gap: 22px; min-height: 62vh; text-align: center; }
+.startbtn { font-family: var(--font-display); font-weight: 700; font-size: 84px; letter-spacing: .04em; line-height: 1; width: min(460px, 80vw); height: 200px; border-radius: 999px; border: 0; background: var(--ink); color: var(--bg); box-shadow: 0 0 0 6px var(--gold-soft), 0 0 0 8px var(--gold); cursor: pointer; transition: transform .1s; -webkit-tap-highlight-color: transparent; }
+.startbtn:active { transform: scale(.97); }
+.start-sub { margin: 0; font-size: 19px; color: var(--muted); }
+.start-note { margin: 0; max-width: 60ch; font-size: 15px; color: var(--warn); }
+.subviews { display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.subviews .btn { font-size: 16px; padding: 10px 16px; min-height: 44px; }
+.help { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 16px; align-items: start; }
+.help article { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; }
+.help h2 { font-family: var(--font-display); font-size: 24px; margin: 0 0 8px; }
+.help article h2 + p, .help article p + h2 { margin-top: 12px; }
+.help ol, .help ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.help p { margin: 8px 0 0; }
+.tm-bar .camsel { padding: 6px 8px; font-size: 13px; max-width: 200px; }
 .review { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.15fr); gap: 28px; align-items: start; }
 @media (max-width: 880px) { .review { grid-template-columns: minmax(0, 1fr); } }
 .rv-left, .rv-right { display: grid; gap: 14px; min-width: 0; }
@@ -478,19 +497,78 @@ body.tm-on { overflow: hidden; }
 </style>
 
 <div class="wrap">
-  <header>
-    <div class="eyebrow">GGPoker · Spin &amp; Gold 3-max · Rush &amp; Cash 6-max</div>
+  <header class="top">
     <h1>Session <span class="amp">Review</span></h1>
-    <p class="lede" id="lede" title="Antippen: ganz lesen">Spiel dein Session-Video ab, und die Seite zeigt bei jeder deiner Entscheidungen sofort die GTO-Linie und die Exploit-Linie gegen deinen Gegnertyp. Spin &amp; Gold: preflop die Solver-Ranges mit Limp, Minraise, kleinem 3-Bet und All-in von 2 bis 25 BB (ChipEV und ICM), am Flop die vorgerechneten Lösungen, Turn und River rechnet das Gerät live. Rush &amp; Cash: preflop mit 6-max-Referenz-Ranges für 100 BB; dazu schreibt die Seite die Line bis zum River mit. Einzelne Screenshots und GG-Handhistorien gehen auch. Der eingebaute Postflop-Solver rechnet direkt auf deinem Gerät.</p>
+    <nav class="views" id="views" aria-label="Ansicht">
+      <button class="btn" type="button" data-view="start" aria-pressed="true">Video Review</button>
+      <button class="btn" type="button" data-view="more" aria-pressed="false">Mehr</button>
+    </nav>
   </header>
 
-  <nav class="views" id="views" aria-label="Ansicht">
-    <button class="btn" type="button" data-view="video" aria-pressed="true">Video-Review</button>
-    <button class="btn" type="button" data-view="review" aria-pressed="false">Hand-Review</button>
-    <button class="btn" type="button" data-view="session" aria-pressed="false">Session-Review</button>
-    <button class="btn" type="button" data-view="charts" aria-pressed="false">Range-Charts</button>
-    <button class="btn" type="button" data-view="solver" aria-pressed="false">Solver</button>
+  <section class="start" id="startView" aria-label="Video Review">
+    <button class="startbtn" type="button" id="goBtn">Start</button>
+    <p class="start-sub">Kamera an, Tisch-Modus auf.<br>Dann am PC die Aufnahme abspielen.</p>
+    <p class="start-note" id="goNote" hidden></p>
+  </section>
+
+  <nav class="subviews" id="subviews" hidden aria-label="Mehr">
+    <button class="btn" type="button" data-sub="help" aria-pressed="true">So funktioniert's</button>
+    <button class="btn" type="button" data-sub="video" aria-pressed="false">Video-Werkzeuge</button>
+    <button class="btn" type="button" data-sub="review" aria-pressed="false">Screenshot</button>
+    <button class="btn" type="button" data-sub="session" aria-pressed="false">Session</button>
+    <button class="btn" type="button" data-sub="charts" aria-pressed="false">Range-Charts</button>
+    <button class="btn" type="button" data-sub="solver" aria-pressed="false">Solver</button>
   </nav>
+
+  <section class="help" id="helpView" hidden aria-label="So funktioniert's">
+    <article>
+      <h2>Starten</h2>
+      <ol>
+        <li>Capture-Stick ans iPad, das PC-Bild läuft hinein.</li>
+        <li><b>Start</b> tippen. Der Capture-Stick geht an, der Tisch-Modus öffnet sich, und der Bildschirm bleibt an.</li>
+        <li>Am PC die fertige Aufnahme abspielen, in normalem Tempo. Die App wertet nur abgespielte Aufnahmen aus, nie ein laufendes Spiel.</li>
+        <li><b>Beenden</b> oben rechts schaltet die Aufnahme aus und sichert die Hände.</li>
+      </ol>
+      <p>Beim ersten Start fragt das iPad nach der Kamera: erlauben. Hängen Kamera und Capture-Stick beide am iPad, erscheint oben im Tisch-Modus ein Menü zum Umschalten. Die Wahl bleibt gespeichert.</p>
+    </article>
+    <article>
+      <h2>Der Tisch-Modus</h2>
+      <ul>
+        <li>Vier feste Felder wie die Fenster am PC: oben links Tisch 1, oben rechts Tisch 2, unten links Tisch 3, unten rechts Tisch 4.</li>
+        <li>Goldener Rahmen und „DU BIST DRAN“: hier steht deine Entscheidung an.</li>
+        <li>Links die Range für deine Stelle, deine Hand ist umrandet. Blasse Hände kommen laut Solver gar nicht an diese Stelle.</li>
+        <li>Rechts oben die Plätze mit Stacks, der Pot und die ganze Hand Straße für Straße.</li>
+        <li>Rechts unten groß die Aktion für deine Hand. Nach der Entscheidung: ✓ wie der Solver, ~ selten gespielt, aber im Mix, ✗ Fehler.</li>
+        <li>Der Knopf neben „Tisch 1“ zeigt den Multiplikator. Er wird vom Tisch gelesen; antippen, falls er nicht stimmt.</li>
+        <li>Einen Gegner antippen setzt seinen Spielertyp. Er bleibt beim Namen gespeichert. Dann steht die Exploit-Aktion gegen diesen Typ groß da (nur bei x2 bis x5), und darunter die Liste für alle Typen.</li>
+      </ul>
+    </article>
+    <article>
+      <h2>Woher die Empfehlungen kommen</h2>
+      <ul>
+        <li><b>Preflop:</b> Solver-Lösungen mit Limp, Minraise, kleinem 3-Bet und All-in von 2 bis 25 BB, 3-handed und heads-up. Bei x2 bis x5 in Chips (ChipEV), ab x10 mit ICM. Ganz kurze Stacks: Push/Fold.</li>
+        <li><b>Flop:</b> vorgerechnete Lösungen. PC und Pi rechnen jeden Tag weiter, die App lädt neue Lösungen von selbst.</li>
+        <li><b>Turn und River:</b> rechnet das iPad live, das dauert etwa eine halbe Minute.</li>
+        <li>Fehlt die Lösung für genau deine Stelle, nimmt die App die nächstmögliche und schreibt dazu, womit sie genähert hat: andere Linie, andere Bet-Größe, ähnlicher Flop oder ähnliche Hand.</li>
+      </ul>
+    </article>
+    <article>
+      <h2>Ein Video testen</h2>
+      <p>Unter Mehr, Video-Werkzeuge auf „Tisch-Modus“ tippen, dann „Video hochladen“. Das Video läuft im iPad, die vier Felder füllen sich wie mit dem Capture-Stick.</p>
+      <h2>Hände-Sicherung</h2>
+      <p>Der Knopf im Tisch-Modus schickt die gelesenen Hände in dein privates GitHub-Repo. Beim ersten Mal einmal einrichten, danach geht es von selbst.</p>
+    </article>
+    <article>
+      <h2>Die anderen Werkzeuge</h2>
+      <ul>
+        <li><b>Video-Werkzeuge:</b> eine Videodatei mit einzelner Auswertung, Bild vom PC empfangen, Ecken markieren, wenn die Kamera auf einen Bildschirm zeigt.</li>
+        <li><b>Screenshot:</b> eine einzelne Hand aus einem Screenshot.</li>
+        <li><b>Session:</b> die ganze Handhistorie aus PokerCraft, sortiert nach Fehlern.</li>
+        <li><b>Range-Charts:</b> alle Preflop-Ranges zum Nachschlagen, dazu wann ICM zählt und wie gerechnet wurde.</li>
+        <li><b>Solver:</b> einen Postflop-Spot selbst rechnen.</li>
+      </ul>
+    </article>
+  </section>
 
   <section class="review" id="reviewView" hidden aria-label="Hand-Review">
     <div class="rv-left">
@@ -567,7 +645,7 @@ body.tm-on { overflow: hidden; }
   <section class="tmode" id="tmode" hidden aria-label="Tisch-Modus">
     <div class="tm-bar"><b>Tisch-Modus</b><span id="tmState" class="muted">Capture-Stick anschließen und „Aufnahme starten“, oder mit „Video hochladen“ eine Aufnahme testen. Links oben hier = Tisch links oben am PC.</span>
       <span class="tm-vc" id="tmVc" hidden><span class="tm-prev" id="tmPrev"></span><button class="btn" type="button" id="tmPlay">Pause</button><input type="range" id="tmSeek" min="0" max="1000" value="0" aria-label="Stelle im Video"><span class="mono" id="tmTime">0:00</span></span>
-      <button class="btn primary" type="button" id="tmGo">Aufnahme starten</button><button class="btn" type="button" id="tmVid">Video hochladen</button><button class="btn" type="button" id="tmHH" title="Die Hände gehen von selbst in dein privates GitHub-Repo. Tippen: einrichten oder sofort senden">Hände-Sicherung</button><button class="btn" type="button" id="tmEnd">Beenden</button></div>
+      <select id="tmCamSel" class="camsel" hidden aria-label="Kamera oder Capture-Stick wählen"></select><button class="btn primary" type="button" id="tmGo">Aufnahme starten</button><button class="btn" type="button" id="tmVid">Video hochladen</button><button class="btn" type="button" id="tmHH" title="Die Hände gehen von selbst in dein privates GitHub-Repo. Tippen: einrichten oder sofort senden">Hände-Sicherung</button><button class="btn" type="button" id="tmEnd">Beenden</button></div>
     <div class="tm-grid" id="tmGrid"></div>
   </section>
   <section class="videorv" id="videoView" hidden aria-label="Video-Review">
@@ -580,7 +658,7 @@ body.tm-on { overflow: hidden; }
         <button class="btn" type="button" id="vPick">Video wählen</button>
         <button class="btn" type="button" id="vRecvBtn">Vom PC empfangen</button>
         <button class="btn" type="button" id="vSendBtn" hidden>Bildschirm senden</button>
-        <button class="btn" type="button" id="vTmBtn">Tisch-Modus (iPad quer)</button>
+        <button class="btn" type="button" id="vTmBtn">Tisch-Modus</button>
         <button class="btn" type="button" id="vCornerBtn" disabled>Ecken markieren</button>
         <button class="btn" type="button" id="vRegionBtn" disabled>Tischbereich markieren</button>
         <button class="btn" type="button" id="vNowBtn" disabled>Aktuelles Bild prüfen</button>
@@ -801,7 +879,7 @@ body.tm-on { overflow: hidden; }
 
   </div>
 
-  <div class="sections">
+  <div class="sections" id="chartNotes" hidden>
     <section>
       <h2>Wann ICM zählt</h2>
       <p class="prose">Bei x2 bis x5 bekommt der Sieger alles. Jeder Chip ist dort gleich viel wert, also rechnest du in Chips (ChipEV). Erst ab x10 werden mehrere Plätze bezahlt. Dann ist ein verlorener Chip mehr wert als ein gewonnener, und die Ranges verschieben sich. Heads-up gibt es nie ICM: Beide sind dann schon sicher im Geld, und der Rest ist linear.</p>
@@ -2672,14 +2750,23 @@ document.addEventListener("paste", e => {
   if (it) { e.preventDefault(); readShot(it.getAsFile()); }
 });
 
-// ---- views ----
+// ---- views: "Video Review" (one Start button) and "Mehr" (help and all other tools) ----
+const SUBS = ["help", "video", "review", "session", "charts", "solver"];
+let lastSub = "help"; try { const k = localStorage.getItem("sg-sub"); if (SUBS.includes(k)) lastSub = k; } catch (e) {}
 function setView(v) {
-  $("reviewView").hidden = v !== "review"; $("chartsView").hidden = v !== "charts"; $("sessionView").hidden = v !== "session"; $("videoView").hidden = v !== "video"; $("solverView").hidden = v !== "solver";
-  if (v !== "video") { try { vid.pause(); } catch (e) {} }
-  document.querySelectorAll("#views [data-view]").forEach(b => b.setAttribute("aria-pressed", b.dataset.view === v ? "true" : "false"));
+  if (v === "more") v = lastSub;
+  if (v !== "start" && !SUBS.includes(v)) v = "start";
+  const sub = SUBS.includes(v); if (sub) { lastSub = v; try { localStorage.setItem("sg-sub", v); } catch (e) {} }
+  $("startView").hidden = v !== "start"; $("subviews").hidden = !sub; $("helpView").hidden = v !== "help";
+  $("reviewView").hidden = v !== "review"; $("chartsView").hidden = v !== "charts"; $("sessionView").hidden = v !== "session"; $("videoView").hidden = v !== "video"; $("solverView").hidden = v !== "solver"; $("chartNotes").hidden = v !== "charts";
+  if (v !== "video" && !document.body.classList.contains("tm-on")) { try { vid.pause(); } catch (e) {} }
+  document.querySelectorAll("#views [data-view]").forEach(b => b.setAttribute("aria-pressed", (b.dataset.view === "start") === (v === "start") ? "true" : "false"));
+  document.querySelectorAll("#subviews [data-sub]").forEach(b => b.setAttribute("aria-pressed", b.dataset.sub === v ? "true" : "false"));
 }
-document.querySelectorAll("#views [data-view]").forEach(b => b.addEventListener("click", () => { setView(b.dataset.view); try { history.replaceState(null, "", "#" + b.dataset.view); } catch (e) {} }));
-const viewFromHash = () => ({ "#charts": "charts", "#session": "session", "#review": "review", "#solver": "solver" })[location.hash] || "video";
+const goView = v => { setView(v); try { history.replaceState(null, "", v === "start" ? location.pathname + location.search : "#" + (v === "more" ? lastSub : v)); } catch (e) {} };
+document.querySelectorAll("#views [data-view]").forEach(b => b.addEventListener("click", () => goView(b.dataset.view)));
+document.querySelectorAll("#subviews [data-sub]").forEach(b => b.addEventListener("click", () => goView(b.dataset.sub)));
+const viewFromHash = () => { const h = location.hash.slice(1); return h === "more" || SUBS.includes(h) ? h : "start"; };
 window.addEventListener("hashchange", () => setView(viewFromHash()));
 setView(viewFromHash());
 { const l = document.getElementById("lede"); if (l) l.addEventListener("click", () => l.classList.toggle("open")); }
@@ -3088,9 +3175,11 @@ $("vSendBtn").addEventListener("click", () => { $("vSendBox").hidden = !$("vSend
 $("vSendGo").addEventListener("click", startSend);
 // camera; with more than one (e.g. an HDMI capture stick on an iPad), a list to choose from
 async function camList(cur) {
-  try { const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput"), sel = $("vCamSel");
-    if (ds.length < 2) { sel.hidden = true; return; }
-    sel.innerHTML = ds.map((d, i) => `<option value="${d.deviceId}"${d.deviceId === cur ? " selected" : ""}>${(d.label || "Kamera " + (i + 1)).replace(/</g, "")}</option>`).join(""); sel.hidden = false;
+  try { const ds = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+    for (const sel of [$("vCamSel"), $("tmCamSel")]) {
+      if (ds.length < 2) { sel.hidden = true; continue; }
+      sel.innerHTML = ds.map((d, i) => `<option value="${d.deviceId}"${d.deviceId === cur ? " selected" : ""}>${(d.label || "Kamera " + (i + 1)).replace(/</g, "")}</option>`).join(""); sel.hidden = false;
+    }
   } catch (e) {}
 }
 $("vCamSel").addEventListener("change", () => { try { localStorage.setItem("sg-cam", $("vCamSel").value); } catch (e) {} $("vCamBtn").click(); });
@@ -3125,7 +3214,7 @@ async function camStart() {
 const APP_URL = "https://markusloechli27-wq.github.io/spin-gold/";
 function camHome() { let top = true; try { top = window.self === window.top; } catch (e) { top = false; } return top && /github\.io$/.test(location.hostname); }
 function camHint() { return `Im Claude-Fenster ist die Kamera gesperrt. Öffne die Web-App in Safari: <a href="${APP_URL}" target="_blank" rel="noopener">${APP_URL.replace("https://", "")}</a>. Dort über Teilen „Zum Home-Bildschirm“ wählen, dann startet sie wie eine App. Videodateien kannst du auch hier auswerten.`; }
-if (!camHome()) { $("vDropNote").hidden = false; $("vDropNote").innerHTML = camHint(); }
+if (!camHome()) { $("vDropNote").hidden = false; $("vDropNote").innerHTML = camHint(); $("goNote").hidden = false; $("goNote").innerHTML = camHint(); }
 // four-corner perspective correction
 let quadPts = [];
 function drawQuad() {
@@ -5566,6 +5655,9 @@ function tmField(i) {
     <div class="tmf-act">${live ? `<span class="tm-turn">DU BIST DRAN</span>` : ""}<div class="tm-main">${act || (live ? `<span class="muted">keine Lösung für diese Stelle</span>` : "")}</div>${live ? rows : ""}${ver ? `<div>${ver}</div>` : ""}</div></div></div>`;
 }
 $("vTmBtn").addEventListener("click", tmOpen);
+// the Start button on the first tab: table mode opens and the capture stick / camera starts in one tap
+$("goBtn").addEventListener("click", () => { tmOpen(); tmStart(); });
+$("tmCamSel").addEventListener("change", () => { try { localStorage.setItem("sg-cam", $("tmCamSel").value); } catch (e) {} if (TM.on) { stopStream(); tmStart(); } });
 $("tmGo").addEventListener("click", tmStart);
 $("tmVid").addEventListener("click", tmVideo);
 // the hands go up on their own; the button only shows the state, sets up the backup or sends the waiting hands right away
