@@ -1640,6 +1640,22 @@ const LR = (() => {
     for (let s = 0; s < bw * bh; s++) if (!on[s] && !seen[s]) { const r = fill(s); if (!r.border && r.n >= Math.max(3, bw * bh * .012)) cnt++; }
     return cnt;
   }
+  // "6" and "8" look alike in small, soft card corners (the glyph classifiers mixed them up). Their holes tell them apart:
+  // an 8 has two, a 6 one in its lower half. Without a clear hole the classifier's answer stands.
+  function sixEight(c, W, fallback) {
+    const bw = c.w, bh = c.h, on = new Uint8Array(bw * bh), seen = new Uint8Array(bw * bh), hs = [];
+    for (const i of c.pix) { const x = i % W - c.x0, y = ((i / W) | 0) - c.y0; on[y * bw + x] = 1; }
+    for (let s0 = 0; s0 < bw * bh; s0++) {
+      if (on[s0] || seen[s0]) continue;
+      const st = [s0]; seen[s0] = 1; let n = 0, sy = 0, border = false;
+      while (st.length) { const i = st.pop(), x = i % bw, y = (i / bw) | 0; n++; sy += y; if (x === 0 || y === 0 || x === bw - 1 || y === bh - 1) border = true;
+        for (const j of [i - 1, i + 1, i - bw, i + bw]) if (j >= 0 && j < bw * bh && Math.abs((j % bw) - x) <= 1 && !on[j] && !seen[j]) { seen[j] = 1; st.push(j); } }
+      if (!border && n >= Math.max(2, bw * bh * .008)) hs.push(sy / n / bh);
+    }
+    if (hs.length >= 2) return "8";
+    if (hs.length === 1) return hs[0] > .5 ? "6" : "8";
+    return fallback;
+  }
   function renderTemplates() {
     const out = [];
     const fonts = ['700 64px "Roboto Condensed"', '700 64px Roboto', '500 64px Roboto', 'bold 64px Arial', 'bold 64px "Arial Narrow"', 'bold 64px sans-serif', '64px sans-serif'];
@@ -1929,6 +1945,7 @@ const LR = (() => {
           if (vc && vc.s >= .85) rank = vc.ch;
           else { const ff = feat(g[0], W); const r = classify(ff, "rank"); rank = r.s > .6 ? r.ch : null; if (r.ch === "T") rank = "T"; }
           if (g[0].w / g[0].h > .95) rank = "T";   // "10" drawn as one blob
+          if (rank === "6" || rank === "8") rank = sixEight(g[0], W, rank);
         }
         // colour of the card face around the corner (white glyph pixels skipped)
         const col = meanColor(im, gx0 - .35 * dh, g[0].y0, gx1 + .35 * dh, suit.y1, (r, gg, b) => r > 150 && gg > 150 && b > 150);
@@ -2065,7 +2082,7 @@ const LR = (() => {
     })();
     return readyP;
   }
-  return { read, ready, _split: splitNum, _refine: refine, _parse: parseNum, _feat: feat, _comps: comps, _mask: mask, _lines: lines, _imageData: imageData, P, classify };
+  return { read, ready, _sixEight: sixEight, _split: splitNum, _refine: refine, _parse: parseNum, _feat: feat, _comps: comps, _mask: mask, _lines: lines, _imageData: imageData, P, classify };
 })();
 
 // ================= Hand review: EV engine =================
@@ -4739,7 +4756,29 @@ function mtFindWindows(src) {
   // the same window found twice (its title bar split into two bands): keep one
   const iou = (p, q) => { const w = Math.min(p[0] + p[2], q[0] + q[2]) - Math.max(p[0], q[0]), h = Math.min(p[1] + p[3], q[1] + q[3]) - Math.max(p[1], q[1]); if (w <= 0 || h <= 0) return 0; const i = w * h; return i / (p[2] * p[3] + q[2] * q[3] - i); };
   const uniq = []; for (const r of rects) if (!uniq.some(u => iou(u, r) > .6)) uniq.push(r);
-  return uniq.filter(r => (uniq.length < 2 || r[3] >= .6 * mh) && r[2] * src.width >= 380).sort((p, q) => Math.abs(p[1] - q[1]) > .05 ? p[1] - q[1] : p[0] - q[0]);   // reading order
+  return mtGridSlots(uniq.filter(r => (uniq.length < 2 || r[3] >= .6 * mh) && r[2] * src.width >= 380).sort((p, q) => Math.abs(p[1] - q[1]) > .05 ? p[1] - q[1] : p[0] - q[0]));   // reading order
+}
+// Tables keep their number by place: top left 1, top right 2, bottom left 3, bottom right 4. Windows in a 2x2 grid get
+// these four slots; a window not found in this frame (a popup over its title bar, the spin wheel) keeps its slot with
+// the place it had before, or the place the grid gives it, so the other tables do not move up a number.
+function mtGridSlots(rs) {
+  if (rs.length < 2 || rs.length > 4) return rs;
+  const cx = r => r[0] + r[2] / 2, cy = r => r[1] + r[3] / 2, mw = Math.min(...rs.map(r => r[2])), mh = Math.min(...rs.map(r => r[3]));
+  const xs = rs.map(cx), ys = rs.map(cy), twoCols = Math.max(...xs) - Math.min(...xs) > .5 * mw, twoRows = Math.max(...ys) - Math.min(...ys) > .5 * mh;
+  const prev = mt.slots || [];
+  const midX = twoCols ? (Math.max(...xs) + Math.min(...xs)) / 2 : prev.length === 4 ? (cx(prev[0]) + cx(prev[1])) / 2 : null;
+  const midY = twoRows ? (Math.max(...ys) + Math.min(...ys)) / 2 : prev.length === 4 ? (cy(prev[0]) + cy(prev[2])) / 2 : null;
+  if (midX == null || midY == null) return rs;   // one row or one column only, and no grid seen before: reading order
+  const out = [null, null, null, null];
+  for (const r of rs) { const k = (cy(r) > midY ? 2 : 0) + (cx(r) > midX ? 1 : 0); if (out[k]) return rs; out[k] = r; }   // two in one place: no grid
+  for (let k = 0; k < 4; k++) if (!out[k]) {
+    if (prev[k]) { out[k] = prev[k]; continue; }
+    const row = out[k ^ 1], col = out[k ^ 2];   // same row, other column / same column, other row
+    if (row && col) out[k] = [col[0], row[1], col[2], row[3]];
+    else return rs;
+  }
+  mt.slots = out;
+  return out;
 }
 // a region holds a whole table: at least 3 seats, a dealer button and the hero at the bottom
 function mtBtnHint(fc, k, i) {
@@ -4790,7 +4829,7 @@ function mtRun(i, fn) { // run the single-table logic with table i's own state
     if (added) { renderTimeline(); if (vr.cur && vr.cur.table === i) renderVPanel(vr.cur); }
   }
 }
-function mtReset() { vr.tables = []; mt.over = {}; mt.lastWin = null; mt.rectsUsed = null; vr.multi = false; vr.liveMsgs = []; mt.layout = mt.mode === "auto" ? "1" : mt.mode; mt.checkedAt = -1e9; mt.misses = 0; mtOverlay(); }
+function mtReset() { vr.tables = []; mt.over = {}; mt.lastWin = null; mt.slots = null; mt.rectsUsed = null; vr.multi = false; vr.liveMsgs = []; mt.layout = mt.mode === "auto" ? "1" : mt.mode; mt.checkedAt = -1e9; mt.misses = 0; mtOverlay(); }
 async function readFrameTables(fc, t, manual, opts) {
   let reads = null; const now = performance.now(), t0 = now;
   if (mt.mode === "auto") {
@@ -4798,6 +4837,10 @@ async function readFrameTables(fc, t, manual, opts) {
     // must not stay on a whole-screen read for the next 20 s
     let peek = false;
     if (mt.layout !== "win" && now - (mt.peekAt || -1e9) > 2000) { mt.peekAt = now; peek = mtFindWindows(fc).length >= 2; }
+    // with the windows in use: a window that opened, closed or moved (a new spin starts in a new window) is taken at once,
+    // not after up to 20 s, which used to cost the first hand of a new spin
+    else if (mt.layout === "win" && now - (mt.peekAt || -1e9) > 2000) { mt.peekAt = now; const ws = mtFindWindows(fc), cur = MT_LAYOUTS.win || [];
+      peek = ws.length >= 2 && (ws.length !== cur.length || ws.some((r, i) => !cur[i] || r.some((v, j) => Math.abs(v - cur[i][j]) > .02))); }
     if (now - mt.checkedAt > 20000 || mt.misses >= 4 || manual || peek) {
       const d = mtDetect(fc, opts); mt.checkedAt = now; mt.misses = 0;
       if (d) {
@@ -4875,13 +4918,19 @@ vid.addEventListener("seeked", () => { vr.tables = []; mt.checkedAt = -1e9; });
 
 // ================= Spin & Gold: hand history per table, early-level advice, four-field review, card picker =================
 // seats for 3-handed or heads-up spins, same shape as cashSeatsFromRaw
-function spinSeats(raw) {
+function spinSeats(raw, prevHeroPos) {
   const n = (raw.seats || []).length;
   if (n >= 3) return cashSeatsFromRaw(raw);
   if (n !== 2) return null;
   const seats = raw.seats.map(s => Object.assign({}, s, { stack: NUMV(s.stack), bet: NUMV(s.bet) || 0 }));
   if (seats.some(s => typeof s.stack !== "number")) return null;
-  let d = seats.findIndex(s => s.dealer); if (d < 0) d = seats.findIndex(s => Math.abs(s.bet - .5) < .02); if (d < 0) return null;
+  let d = seats.findIndex(s => s.dealer); if (d < 0) d = seats.findIndex(s => Math.abs(s.bet - .5) < .02);
+  if (d < 0) {   // no button and no 0.5 BB seen (the SB already limped, or the frame came late): heads-up hands were skipped
+    const h = seats.findIndex(s => s.hero), o = 1 - h;
+    if (h >= 0 && raw.buttons && Math.abs(seats[h].bet - 1) < .02 && Math.abs(seats[o].bet - 1) < .02) d = o;   // both in for 1 BB, hero to act: the SB limped, the hero is the BB
+    else if (h >= 0 && prevHeroPos) d = prevHeroPos === "SB" ? o : h;   // heads-up the blinds swap every hand
+  }
+  if (d < 0) return null;
   const out = seats.map((s, i) => ({ pos: i === d ? "SB" : "BB", stack: s.stack, bet: s.bet, cards: s.cards !== false, hero: !!s.hero, ang: typeof s.ang === "number" ? s.ang : 90 }));
   out.sort((a, b) => (b.hero ? 1 : 0) - (a.hero ? 1 : 0));
   return { n: 2, seats: out, heroPos: out[0].pos, notes: [], order: ["SB", "BB"] };
@@ -4889,7 +4938,7 @@ function spinSeats(raw) {
 const postOrderOf = H => H.n === 2 ? ["BB", "SB"] : CASH.POST_ORDER.filter(p => H.slots.some(s => s.pos === p));
 // track the whole hand of a spin table from the frames (folds, bets, streets, board); no evaluation here
 function spinTrack(raw, t, manual) {
-  const S = spinSeats(raw), cards = raw.hero_cards;
+  const S = spinSeats(raw, vr.sh && vr.sh.n === 2 ? vr.sh.heroPos : null), cards = raw.hero_cards;
   let H = vr.sh;
   if (cards && (!H || H.cards !== cards)) {
     if (!S) return null;
@@ -4907,17 +4956,20 @@ function spinTrack(raw, t, manual) {
   }
   const st = H.streets[H.street];
   if (H.street > 0 && raw.board_cards && raw.board_cards.length) { const nb = raw.board_cards; if (nb.filter(Boolean).length >= st.board.filter(Boolean).length) { st.board = nb.slice(); H.ver++; } }
+  // folds and bets seen in this frame go into the line in acting order: a BTN limp and an SB fold that show up in the same
+  // frame are "L-F", not "F-L" (the fold used to be written first, so the hero got the advice for the wrong spot)
+  const ev = [];
   for (const sl of H.slots) { if (sl.hero || sl.folded) continue; const s = cur[sl.pos]; if (!s) continue;
     // out of the hand: two frames without cards, or one when the hero is to act (the line must be complete then)
-    if (!s.cards) { sl.miss++; if (sl.miss >= 2 || (raw.buttons && cards)) { sl.folded = true; ctAct(H, sl.pos, "fold"); } } else sl.miss = 0; }
-  const decision = !!(raw.buttons && cards), vals = [];
+    if (!s.cards) { sl.miss++; if (sl.miss >= 2 || (raw.buttons && cards)) { sl.folded = true; ev.push({ pos: sl.pos, fold: true }); } } else sl.miss = 0; }
+  const decision = !!(raw.buttons && cards), vals = ev;
   const heroDone = H.heroFolded || H.streets[0].acts.some(a => a.pos === H.heroPos), hOrd = H.order.indexOf(H.heroPos);
   for (const sl of H.slots) { if (sl.folded) continue; const s = cur[sl.pos]; if (!s) continue; sl.stack = s.stack;
     if (H.street === 0 && !sl.hero && !heroDone && H.order.indexOf(sl.pos) > hOrd) continue;
     const b = s.bet || 0, have = st.com[sl.pos] || 0;
     if (b > have + .01) { if (sl.pend && Math.abs(sl.pend.v - b) < .01) sl.pend.n++; else sl.pend = { v: b, n: 1 }; if (sl.pend.n >= 2 || decision) vals.push({ pos: sl.pos, v: b, allin: s.stack <= .05 }); }
     else sl.pend = null; }
-  if (vals.length) ctCommit(H, vals);
+  if (ev.length) { const ord = ctOrder(H); ev.sort((x, y) => ord.indexOf(x.pos) - ord.indexOf(y.pos)); for (const e of ev) { if (e.fold) ctAct(H, e.pos, "fold"); else ctCommit(H, [e]); } }
   H.heroTurn = decision;
   return H;
 }
