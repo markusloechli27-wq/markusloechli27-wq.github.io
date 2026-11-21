@@ -560,6 +560,7 @@ body.tm-on { overflow: hidden; }
         <li><b>Flop:</b> vorgerechnete Lösungen. PC und Pi rechnen jeden Tag weiter, die App lädt neue Lösungen von selbst.</li>
         <li><b>Turn und River:</b> rechnet das iPad live, das dauert etwa eine halbe Minute.</li>
         <li>Fehlt die Lösung für genau deine Stelle, nimmt die App die nächstmögliche und schreibt dazu, womit sie genähert hat: andere Linie, andere Bet-Größe, ähnlicher Flop oder ähnliche Hand.</li>
+        <li>Noch nicht gerechnet sind Flops in Pots zu dritt und in 3-Bet-Pots, und damit auch Turn und River dort. Das Feld sagt es dann so.</li>
       </ul>
     </article>
     <article>
@@ -5145,7 +5146,15 @@ function spinTrack(raw, t, manual) {
   }
   // the buttons stay up for a moment after the hero clicked: his own action, just seen, is not a new decision
   const lastAct = H.streets[H.street].acts.filter(a => !a.est).slice(-1)[0];
-  H.heroTurn = decision && !(lastAct && lastAct.pos === H.heroPos && !H.streets[H.street].acts.slice(H.streets[H.street].acts.indexOf(lastAct) + 1).some(a => a.pos !== H.heroPos));
+  // after the flop with at most one player left who still has chips (somebody all-in), nobody decides anything: buttons
+  // read then (insurance, run it twice, show cards) are not a decision
+  // all-in: seen going all-in, the "All-in" label now, or the whole starting stack already in the pot (a call that was
+  // only estimated when the chips went straight into the pot)
+  const inPot = pos => H.streets.reduce((acc, x) => acc + ((x.com && x.com[pos]) || 0), 0);
+  const isAllin = sl => sl.allin || (cur[sl.pos] && cur[sl.pos].allin) || (typeof sl.stack === "number" && sl.stack <= .05) || (typeof sl.start === "number" && sl.start > 0 && inPot(sl.pos) >= sl.start - .05);
+  const live = H.slots.filter(sl => !sl.folded && !(sl.hero && H.heroFolded)), withChips = live.filter(sl => !isAllin(sl));
+  const noDecision = H.street >= 1 && withChips.length <= 1;
+  H.heroTurn = decision && !noDecision && !(lastAct && lastAct.pos === H.heroPos && !H.streets[H.street].acts.slice(H.streets[H.street].acts.indexOf(lastAct) + 1).some(a => a.pos !== H.heroPos));
   return H;
 }
 // ---- early-level advice: which solver node the hero is at ----
@@ -5240,6 +5249,9 @@ function cbSpot(H) {
   const find = line => CB.spots.filter(s => s.game === game && (s.lines || [s.line]).includes(line));
   let c = find(real), alt = null;
   if (!c.length && CB_LINE_ALT[game][real]) { alt = CB_LINE_ALT[game][real]; c = find(alt); }
+  // another raise size (a bigger raise than the min-raise that was solved, or the other way round): the same line with
+  // the size that is in the library is the nearest answer, e.g. "L-R-C" (limp, raise to 3, call) as "L-r-C"
+  if (!c.length) for (const v of [real.replace(/R/g, "r"), real.replace(/r/g, "R")]) { if (v === real) continue; const f = find(v); if (f.length) { alt = v; c = f; break; } }
   if (!c.length) return null;
   const sp = c.reduce((b, s) => Math.abs(s.S - eff) < Math.abs(b.S - eff) ? s : b, c[0]);
   return alt ? Object.assign({}, sp, { altFrom: real }) : sp;
@@ -5751,6 +5763,9 @@ function tmField(i) {
     range = `<div class="tmf-range"><p class="small">Unter ${String(adv.lim || 8.5).replace(".", ",")} BB: Push/Fold.</p></div>`;
     if (e) act = `<span class="big" style="background:${e.gtoAct === "fold" ? "var(--cell)" : "var(--push)"};color:${e.gtoAct === "fold" ? "var(--ink)" : "var(--on-push)"}">${e.gtoAct === "fold" ? "Fold" : (ACT[e.gtoAct] || {}).label || "All-in"}</span>`;
   } else if (adv && adv.miss) range = `<div class="tmf-range"><p class="muted small">${adv.miss === true ? `Linie ${adv.path || "first-in"} ist nicht im Solver-Baum.` : adv.miss}</p></div>`;
+  // the hero is to act on the flop of a line the library does not have yet: say which kind of pot, not "no decision"
+  else if (live && H.street === 1 && !adv) { const ln = spinLine(H, true).join("-"), three = H.slots.filter(sl => !sl.folded).length >= 3;
+    range = `<div class="tmf-range"><p class="muted small">${three ? "Pot zu dritt" : /T|J/.test(ln) ? "3-Bet-Pot" : `Linie ${ln}`}: am Flop noch nicht gerechnet.</p></div>`; }
   // verdict of the last decision
   let ver = "";
   if (!live && sp) { const v = sp.spinPost ? spinPostVerdict(sp) : earlyVerdict(sp); // three grades: the solver plays it often (✓), sometimes (a mixed action, no mistake: ~), hardly ever (✗)
