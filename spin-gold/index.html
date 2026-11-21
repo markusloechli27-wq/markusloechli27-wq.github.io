@@ -5503,7 +5503,7 @@ function hqSave(q) { try { localStorage.setItem(HQ_KEY, JSON.stringify(q.slice(-
 function hsConf() { try { const c = JSON.parse(localStorage.getItem(HS_KEY) || "null"); return c && c.repo && c.token ? c : null; } catch (e) { return null; } }
 function hsSetup() {
   const old = hsConf() || {};
-  const repo = (prompt("GitHub-Repo für die Hände (Besitzer/Name):", old.repo || "markusloechli27-wq/spin-haende") || "").trim();
+  const repo = (prompt("GitHub-Repo für die Hände (Besitzer/Name):", old.repo && !/^markusloechli27-wq\//.test(old.repo) ? old.repo : "markusloe123/spin-haende") || "").trim();
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) return false;
   const token = (prompt("GitHub-Schlüssel (Fine-grained token, nur dieses Repo, Contents: Read and write):", "") || "").trim();
   if (!token) return false;
@@ -5529,7 +5529,7 @@ async function hsPush(now) {
       const hd = { Authorization: "Bearer " + c.token, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
       let r = await fetch(url, { method: "PUT", headers: hd, body: JSON.stringify({ message: `Hände ${path.slice(7, 17)} (${batch.length})`, content: hsB64(body) }) });
       if (r.status === 422) { const g = await fetch(url, { headers: hd }); if (g.ok) r = g; }   // same batch already up (the answer got lost last time)
-      if (r.status === 401 || r.status === 403 || r.status === 404) { HS.err = "auth"; break; }
+      if (r.status === 401 || r.status === 403 || r.status === 404) { HS.err = "auth"; HS.code = r.status; break; }
       if (!r.ok) { HS.err = "net"; break; }
       const rest = hqLoad(); hqSave(rest.slice(batch.length)); HS.err = null; HS.last = Date.now();   // the hands written meanwhile came after the batch
     }
@@ -5541,7 +5541,8 @@ function hsLabel() { if (typeof tmHHLabel === "function" && typeof TM !== "undef
 function hsState() {
   const n = hqLoad().length;
   if (!hsConf()) return { n, text: "Hände-Sicherung einrichten", warn: true };
-  if (HS.err === "auth") return { n, text: "GitHub-Schlüssel prüfen", warn: true };
+  // what GitHub said: 404 = this repo is not there or not in the key, 401 = the key is wrong or expired, 403 = the key may not write
+  if (HS.err === "auth") return { n, text: HS.code === 404 ? `Repo ${hsConf().repo} nicht gefunden: antippen` : HS.code === 401 ? "Schlüssel ungültig: antippen" : HS.code === 403 ? "Schlüssel ohne Schreibrecht: antippen" : "GitHub-Schlüssel prüfen", warn: true };
   if (HS.busy) return { n, text: `Hände: sichere ${n} …` };
   if (n) return { n, text: `Hände: ${n} warten${HS.err === "net" ? " (offline)" : ""}`, warn: HS.err === "net" };
   return { n, text: `Hände gesichert ✓ (${hhCount()})` };
