@@ -1429,6 +1429,7 @@ function view() {
 
 function cellStyle(v, i, cmp) {
   const L = v.layers;
+  if (!L || !L.length) return ["var(--cell)", "var(--cell-ink)", ""];   // only the rest action (fold or check) for every hand
   const a = L[0][1][i], ca = ACT[L[0][0]];
   let bg = "var(--cell)", fg = "var(--cell-ink)", cls = "";
   if (cmp && v.cev) {
@@ -1986,6 +1987,10 @@ const LR = (() => {
       const s = bi >= 0 && seats[bi], inLane = s && (s.cy > .6 * im.h ? Math.abs(b.cx - s.cx) < 3.5 * dh : Math.abs(b.cy - s.cy) < 4.5 * dh);
       if (bi >= 0 && bd > 1.2 * dh && bd < 13 * dh && (!winLike || inLane)) { betCand[bi].push(b); bets[bi] = Math.max(bets[bi], b.val); (LR_DBG.bets = LR_DBG.bets || []).push({ v: b.str, cx: Math.round(b.cx), cy: Math.round(b.cy), seat: bi, felt: +feltFrac(b).toFixed(2), H: b.H, units: b.bb }); }
     }
+    // two numbers at one seat: the real bet has the bet font of this table, a smaller number near it (a counter, a
+    // badge) does not (a "4" under the hero's "1 BB" made his bet 4, and the raiser facing it was read as folded)
+    { const allB = betCand.flat(), Hm = allB.length ? Math.max(...allB.map(b => b.H || 0)) : 0;
+      betCand.forEach((cs, i) => { if (cs.length < 2 || !Hm) return; const big = cs.filter(b => (b.H || 0) >= .92 * Hm); if (big.length && big.length < cs.length) { betCand[i] = big; bets[i] = Math.max(...big.map(b => b.val)); } }); }
     // 3) dealer button (yellow disc)
     const disc = yel.filter(c => c.w >= .95 * dh && c.w <= 3.6 * dh && c.h >= .95 * dh && c.h <= 3.6 * dh && c.w / c.h > .75 && c.w / c.h < 1.33 && c.n / (c.w * c.h) > .5)   // small windows: the disc is only about 1.2 digit heights
       .sort((a, b) => b.n / (b.w * b.h) - a.n / (a.w * a.h))[0];
@@ -4946,7 +4951,9 @@ function mtDetect(fc, opts) {
     const rs = mtReadAll(fc, k, opts), n = rs.filter(mtValid).length, score = n * 10 - MT_LAYOUTS[k].length + (k === "win" ? 5 : 0);   // found windows beat a fixed grid
     if (n > 0 && score > bestScore) { bestScore = score; best = { layout: k, reads: rs, rects }; }
   }
-  if (best && best.rects) { MT_LAYOUTS.win = best.rects; mt.lastWin = best.rects; } else if (!win.length) delete MT_LAYOUTS.win; else MT_LAYOUTS.win = win;
+  // no windows for a moment (a dialog, the lobby): the windows in use stay, so the tables keep their hands and the
+  // reading goes on (deleting them while the layout was "win" broke every frame until the windows came back)
+  if (best && best.rects) { MT_LAYOUTS.win = best.rects; mt.lastWin = best.rects; } else if (!win.length) { if (mt.layout !== "win") delete MT_LAYOUTS.win; else if (mt.lastWin) MT_LAYOUTS.win = mt.lastWin; } else MT_LAYOUTS.win = win;
   return best;
 }
 function mtTableState(i) { return vr.tables[i] || (vr.tables[i] = { pending: null, lastKey: null, gRun: 0, gLast: null, game: null, seatHist: [], hand: null, cand: null }); }
@@ -4987,6 +4994,7 @@ async function readFrameTables(fc, t, manual, opts) {
       }
     }
   } else if (mt.layout !== mt.mode) { mt.layout = mt.mode; vr.tables = []; mtOverlay(); }
+  if (!MT_LAYOUTS[mt.layout]) return;   // no layout yet: wait for the next look
   const k = mt.layout; vr.multi = MT_LAYOUTS[k].length > 1;
   // one table after the other, with a breath in between: on a tablet the four reads take a while, and the video and the
   // page must keep running meanwhile
@@ -5070,16 +5078,30 @@ function spinSeats(raw, prevHeroPos) {
 const postOrderOf = H => H.n === 2 ? ["BB", "SB"] : CASH.POST_ORDER.filter(p => H.slots.some(s => s.pos === p));
 // track the whole hand of a spin table from the frames (folds, bets, streets, board); no evaluation here
 function spinTrack(raw, t, manual) {
+  // two seats almost on top of each other: a misread frame (a window moving, a popup), not a table of three
+  const angs = (raw.seats || []).map(s => s.ang).filter(a => typeof a === "number");
+  for (let i = 0; i < angs.length; i++) for (let j = i + 1; j < angs.length; j++) if (Math.abs(((angs[i] - angs[j] + 540) % 360) - 180) < 40) return vr.sh;
   const S = spinSeats(raw, vr.sh && vr.sh.n === 2 ? vr.sh.heroPos : null), cards = raw.hero_cards;
   let H = vr.sh;
+  // a spin deals everybody in: a seat without cards in the first picture is still being dealt to, not folded
+  const fresh = S => { const h = ctNewHand(S, cards, t); h.spin = true; h.at = Date.now(); for (const sl of h.slots) sl.folded = false; h.streets[0].acts = h.streets[0].acts.filter(x => x.t !== "fold"); return h; };
   if (cards && (!H || H.cards !== cards)) {
     if (!S) return null;
     vr.shCand = vr.shCand && vr.shCand.cards === cards ? { cards, n: vr.shCand.n + 1 } : { cards, n: 1 };
-    if (vr.shCand.n >= 2 || manual || raw.buttons) { if (H) { H.done = true; hhLog(H, S); } H = vr.sh = ctNewHand(S, cards, t); H.spin = true; H.at = Date.now(); vr.shCand = null; }
+    if (vr.shCand.n >= 2 || manual || raw.buttons) { if (H) { H.done = true; hhLog(H, S); } H = vr.sh = fresh(S); vr.shCand = null; }
   }
   if (!H || H.done) return H;
-  const cur = {}; for (const s of (raw.seats || [])) { if (typeof s.ang !== "number") continue; const sl = ctMatch(H, s); if (sl) cur[sl.pos] = { stack: s.stack, bet: s.bet || 0, cards: s.cards !== false }; }
+  // the hand was set up from a bad first picture (a seat not read, so heads-up instead of three, or the hero in the
+  // wrong blind): while the hero has not acted, two pictures with the dealer button that disagree set it up again
+  if (H.street === 0 && S && cards === H.cards && (raw.seats || []).some(s => s.dealer) && !H.streets[0].acts.some(a => a.pos === H.heroPos && !a.est)) {
+    // nobody leaves during a hand: fewer seats read means a seat was not read, never a reason to set it up again
+    if (S.n > H.n || (S.n === H.n && S.heroPos !== H.heroPos)) { H.reseat = (H.reseat || 0) + 1; if (H.reseat >= 2) H = vr.sh = fresh(S); }
+    else H.reseat = 0;
+  }
+  const cur = {}; for (const s of (raw.seats || [])) { if (typeof s.ang !== "number") continue; const sl = ctMatch(H, s); if (sl) cur[sl.pos] = { stack: s.stack, bet: s.bet || 0, cards: s.cards !== false, allin: !!s.allin || (typeof s.stack === "number" && s.stack <= .05) }; }
   if (!cards) { H.noCards = (H.noCards || 0) + 1; if (H.noCards >= 3 && !H.heroFolded) { H.heroFolded = true; ctAct(H, H.heroPos, "fold"); } } else H.noCards = 0;
+  // the same cards are back (a popup or an animation hid them): the hero did not fold, take the fold back
+  if (cards && cards === H.cards && H.heroFolded) { const acts = H.streets[H.street].acts; for (let i = acts.length - 1; i >= 0; i--) if (acts[i].pos === H.heroPos && acts[i].t === "fold") { acts.splice(i, 1); break; } H.heroFolded = false; H.ver++; }
   const bc = raw.board || 0, sIdx = bc >= 5 ? 3 : bc >= 4 ? 2 : bc >= 3 ? 1 : 0;
   if (sIdx > H.street && sIdx <= 3) {
     ctCloseStreet(H);
@@ -5091,7 +5113,15 @@ function spinTrack(raw, t, manual) {
   // folds and bets seen in this frame go into the line in acting order: a BTN limp and an SB fold that show up in the same
   // frame are "L-F", not "F-L" (the fold used to be written first, so the hero got the advice for the wrong spot)
   const ev = [];
+  // GG lays the action label ("Erhöhen", "All-in", "Call") over the card backs of the player who just acted, so for a
+  // frame or two his cards are not seen. A player who is all-in or has the highest bet of the street has nothing to
+  // fold to: he stays in (a raise or a jam read as a fold left the hero without advice when facing it)
+  const maxBet = Math.max(0, ...Object.values(cur).map(c => c.bet || 0));
+  const heroActed = H.heroFolded || H.streets[0].acts.some(a => a.pos === H.heroPos), heroOrd = H.order.indexOf(H.heroPos);
   for (const sl of H.slots) { if (sl.hero || sl.folded) continue; const s = cur[sl.pos]; if (!s) continue;
+    if (!s.cards && (s.allin || (s.bet || 0) >= maxBet - .01)) { sl.miss = 0; continue; }
+    // preflop, before the hero's first action, a player after him has not had his turn: he cannot have folded
+    if (H.street === 0 && !heroActed && H.order.indexOf(sl.pos) > heroOrd) { sl.miss = 0; continue; }
     // out of the hand: two frames without cards, or one when the hero is to act (the line must be complete then)
     if (!s.cards) { sl.miss++; if (sl.miss >= 2 || (raw.buttons && cards)) { sl.folded = true; ev.push({ pos: sl.pos, fold: true }); } } else sl.miss = 0; }
   const decision = !!(raw.buttons && cards), vals = ev;
@@ -5102,7 +5132,20 @@ function spinTrack(raw, t, manual) {
     if (b > have + .01) { if (sl.pend && Math.abs(sl.pend.v - b) < .01) sl.pend.n++; else sl.pend = { v: b, n: 1 }; if (sl.pend.n >= 2 || decision) vals.push({ pos: sl.pos, v: b, allin: s.stack <= .05 }); }
     else sl.pend = null; }
   if (ev.length) { const ord = ctOrder(H); ev.sort((x, y) => ord.indexOf(x.pos) - ord.indexOf(y.pos)); for (const e of ev) { if (e.fold) ctAct(H, e.pos, "fold"); else ctCommit(H, [e]); } }
-  H.heroTurn = decision;
+  // the hero is to act preflop: whoever had his turn before him and put nothing in has folded, also when his seat
+  // was not read in this picture (without it the line stopped short and no solver node matched)
+  if (decision && H.street === 0 && (H.n === 2 || H.n === 3)) {
+    const game = H.n === 2 ? "hu" : "3h", P = game === "hu" ? ["SB", "BB"] : ["BTN", "SB", "BB"];
+    for (let g = 0; g < 3; g++) {
+      const nx = P[lineActors(game, spinLine(H).join("-")).next]; if (!nx || nx === H.heroPos) break;
+      const sl = H.slots.find(x => x.pos === nx); if (!sl || sl.folded || sl.hero || sl.allin) break;
+      const c = cur[nx]; if (c && (c.bet || 0) > (H.streets[0].com[nx] || 0) + .01) break;   // he put chips in: that bet is still coming
+      sl.folded = true; ctAct(H, nx, "fold");
+    }
+  }
+  // the buttons stay up for a moment after the hero clicked: his own action, just seen, is not a new decision
+  const lastAct = H.streets[H.street].acts.filter(a => !a.est).slice(-1)[0];
+  H.heroTurn = decision && !(lastAct && lastAct.pos === H.heroPos && !H.streets[H.street].acts.slice(H.streets[H.street].acts.indexOf(lastAct) + 1).some(a => a.pos !== H.heroPos));
   return H;
 }
 // ---- early-level advice: which solver node the hero is at ----
@@ -5130,13 +5173,36 @@ function spinLine(H, full) { // preflop actions before the hero's current decisi
 // a preflop line the flop solutions lack, mapped to the nearest one they have: a first raise to 3 BB plays like the
 // minraise pot (same positions, slightly bigger pot)
 const CB_LINE_ALT = { "3h": { "r-F-C": "R-F-C" }, hu: { "r-C": "R-C" } };
+// facing an all-in: what the call costs against the pot (preflop, the chips beyond the hero's stack do not count)
+function spinPotOdds(H) {
+  const st = H.streets[H.street], hs = H.slots.find(s => s.hero); if (!st || !hs || hs.allin) return null;
+  if (!H.slots.some(sl => !sl.hero && !sl.folded && sl.allin)) return null;
+  const com = p => (st.com && st.com[p]) || 0, cap = typeof hs.start === "number" ? hs.start : Infinity, mine = com(hs.pos);
+  const max = Math.max(0, ...H.slots.filter(sl => !sl.hero).map(sl => com(sl.pos))), call = Math.min(max, cap) - mine; if (!(call > .01)) return null;
+  const pot = H.slots.reduce((a, sl) => a + Math.min(com(sl.pos), cap), 0);
+  return { call, pot, need: call / (pot + call) };
+}
+const SPIN_CHEAP_CALL = .22;   // below this much equity needed, every hand calls (even 32o has more against any jam range)
 function earlyAdvice(H, mvO) {   // mvO: multiplier of this table (table mode), else the global choice
   if (!H || H.street !== 0 || !MR || !MR.depths) return null;
   const game = H.n === 2 ? "hu" : H.n === 3 ? "3h" : null; if (!game) return null;
   const eff = ctEff(H), mv = mvO || ($("vMulti") ? $("vMulti").value : "2"), model = mv === "jp" ? "jp" : +mv >= 50 ? "x50" : +mv === 10 ? "x10" : "cev";
   // below the solved stacks: push/fold (the grids reach 5 BB once those solves are in; before that 10 BB)
-  const lo = Math.min(...(game === "hu" ? EARLY_HU() : EARLY_G(model))), lim = lo <= 5 ? Math.min(lo, 4) : 8.5; if (eff < lim) return { pushfold: true, eff, lim };
+  const lo = Math.min(...(game === "hu" ? EARLY_HU() : EARLY_G(model))), lim = lo <= 5 ? Math.min(lo, 4) : 8.5;
   const path = spinLine(H).join("-");
+  // a cheap call against an all-in (the jammer had almost nothing left): pot odds decide, every hand calls
+  const po = spinPotOdds(H);
+  if (po && po.need < SPIN_CHEAP_CALL) {
+    const one = new Float32Array(169).fill(1), idx0 = H.cards ? (parseCards(H.cards) || {}).idx : null, f1 = n => String(Math.round(n * 10) / 10).replace(".", ",");
+    const line0 = lineText(game, path);
+    return { game, S: eff, path, line: line0, eff, ctx: { game, model, stacks: game === "hu" ? eff : [eff, eff, eff] }, potOdds: po, idx: idx0,
+      node: { acts: ["fold", "call"], f: [new Float32Array(169), one] }, view: { layers: [["call", one]], inR: null, rest: "Fold" },
+      freqs: [{ a: "call", v: 1 }], title: `${H.heroPos} gegen All-in`,
+      note: `Pot Odds: ${f1(po.call)} BB zahlen in einen Pot von ${f1(po.pot)} BB. Du brauchst nur ${Math.round(po.need * 100)} % Equity, das hat jede Hand gegen jede All-in-Range. Call.` };
+  }
+  // push/fold only knows all-in or fold: after a limp or a raise (even with tiny stacks) the solver's shortest solved
+  // stack is the nearest answer, e.g. a limp and an all-in from a 1.5 BB big blind
+  if (eff < lim && !/[LRrT]/.test(path)) return { pushfold: true, eff, lim };
   const st = p => { const sl = H.slots.find(s => s.pos === p); return sl ? sl.start : eff; };
   const ctx = game === "hu" ? { game, model: "cev", stacks: nearestOf(EARLY_HU(), eff) } : { game, model, stacks: earlySnap(model, ["BTN", "SB", "BB"].map(p => Math.min(st(p), Math.max(...["BTN", "SB", "BB"].filter(x => x !== p).map(st))))) };
   const S = game === "hu" ? ctx.stacks : nearestOf(EARLY_G(model), eff);
@@ -5148,7 +5214,8 @@ function earlyAdvice(H, mvO) {   // mvO: multiplier of this table (table mode), 
   const ev = earlyViewC(ctx, { path: fd.path });
   // a line the solver never takes (someone, often the hero, left GTO earlier): the node still has the solver's answer
   // for every hand against the opponents' ranges there, so show it, marked as an estimate, instead of nothing
-  const note = ev && ev.empty ? `${line}: ${ev.empty}. Die Werte sind die Antwort des Solvers für deine Hand an dieser Stelle, eine Näherung.` : null;
+  const note = [ev && ev.empty ? `${line}: ${ev.empty}. Die Werte sind die Antwort des Solvers für deine Hand an dieser Stelle, eine Näherung.` : "",
+    eff < lo - .01 ? `Effektiv ${String(Math.round(eff * 10) / 10).replace(".", ",")} BB: gerechnet mit ${String(lo).replace(".", ",")} BB, dem kürzesten gelösten Stack. Eine Näherung.` : ""].filter(Boolean).join(" ") || null;
   const freqs = n.acts.map((a, k) => ({ a, v: idx != null ? n.f[k][idx] : null })).filter(x => x.v == null || x.v > .005);
   return { game, S, path: fd.path, line, alt: altTxt(fd), eff, ctx, node: n, view: ev, spot, idx, freqs, note, title: spot ? spot.title : `${H.heroPos} nach ${line}` };
 }
@@ -5619,7 +5686,8 @@ async function tmOcrNext() {
 function tmRender(force) {
   if ($("tmode").hidden) return;
   const now = performance.now(); if (!force && now - TM.last < 300) return; TM.last = now;
-  $("tmGrid").innerHTML = [0, 1, 2, 3].map(tmField).join("");
+  // one field that fails to draw must not blank the other three (or stop the reading)
+  $("tmGrid").innerHTML = [0, 1, 2, 3].map(i => { try { return tmField(i); } catch (e) { console.error("tmField", i, e); return `<div class="tmf idle"><div class="tmf-head"><b>Tisch ${i + 1}</b><span class="muted">Anzeige-Fehler: ${String(e && e.message || e).replace(/</g, "")}</span></div></div>`; } }).join("");
   $("tmGrid").querySelectorAll("[data-tmtag]").forEach(b => b.onclick = () => { const [i, pos] = b.dataset.tmtag.split("|"); tmCycleTag(+i, pos); });
   $("tmGrid").querySelectorAll("[data-tmrow]").forEach(b => b.onclick = () => { const [i, ti] = b.dataset.tmrow.split("|").map(Number); TM.view[i] = TM.view[i] === ti ? null : ti; tmRender(true); });
   $("tmGrid").querySelectorAll("[data-tmm]").forEach(b => b.onclick = () => { const T = mtTableState(+b.dataset.tmm), k = TM_MULTI.findIndex(m => m[0] === (T.multi || "2"));
