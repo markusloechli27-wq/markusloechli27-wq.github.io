@@ -5093,6 +5093,7 @@ function spinTrack(raw, t, manual) {
     if (vr.shCand.n >= 2 || manual || raw.buttons) { if (H) { H.done = true; hhLog(H, S); } H = vr.sh = fresh(S); vr.shCand = null; }
   }
   if (!H || H.done) return H;
+  if (cards && cards === H.cards) H.seenAt = performance.now();   // the field drops the hand when the table is gone (see tmField)
   // the hand was set up from a bad first picture (a seat not read, so heads-up instead of three, or the hero in the
   // wrong blind): while the hero has not acted, two pictures with the dealer button that disagree set it up again
   if (H.street === 0 && S && cards === H.cards && (raw.seats || []).some(s => s.dealer) && !H.streets[0].acts.some(a => a.pos === H.heroPos && !a.est)) {
@@ -5154,7 +5155,8 @@ function spinTrack(raw, t, manual) {
   const inPot = pos => H.streets.reduce((acc, x) => acc + ((x.com && x.com[pos]) || 0), 0);
   const isAllin = sl => sl.allin || (cur[sl.pos] && cur[sl.pos].allin) || (typeof sl.stack === "number" && sl.stack <= .05) || (typeof sl.start === "number" && sl.start > 0 && inPot(sl.pos) >= sl.start - .05);
   const live = H.slots.filter(sl => !sl.folded && !(sl.hero && H.heroFolded)), withChips = live.filter(sl => !isAllin(sl));
-  const noDecision = H.street >= 1 && withChips.length <= 1;
+  // everybody else folded: the hand is over (GG shows buttons like "show cards" then), nothing to decide on any street
+  const noDecision = (H.street >= 1 && withChips.length <= 1) || !live.some(sl => !sl.hero);
   H.heroTurn = decision && !noDecision && !(lastAct && lastAct.pos === H.heroPos && !H.streets[H.street].acts.slice(H.streets[H.street].acts.indexOf(lastAct) + 1).some(a => a.pos !== H.heroPos));
   return H;
 }
@@ -5732,6 +5734,9 @@ function tmField(i) {
   const T = vr.tables[i], q = quadData(i), mlt = mtMulti(T) || "2", auto = T && !T.multi && T.multiAuto;
   const mLab = auto ? (mlt === "jp" ? "JP" : "x" + mlt) : (TM_MULTI.find(m => m[0] === mlt) || TM_MULTI[0])[1];
   const head = (extra) => `<div class="tmf-head"><b>Tisch ${i + 1}</b><button type="button" class="tm-multi" data-tmm="${i}" title="Multiplikator dieses Tisches">${mLab}</button>${extra || ""}</div>`;
+  // a hand whose cards have not been seen for 25 s: the table is gone (the spin ended, the window closed), not still running
+  if (q && q.H && !q.H.done && q.H.seenAt && performance.now() - q.H.seenAt > 25000) { q.H.done = true; if (typeof hhLog === "function" && !q.H.logged) { const c = vr.curTable; vr.curTable = i; hhLog(q.H, null); vr.curTable = c; } }
+  if (q && q.H && q.H.done && q.H.seenAt && performance.now() - q.H.seenAt > 25000) q.H = null;
   if (!q || !q.H) return `<div class="tmf idle">${head(`<span class="muted">${!TM.on ? "wartet" : TM.noStick ? "wartet auf den Capture-Stick" : T && T.game === "spin" ? "Tisch erkannt · wartet auf die nächste Hand" : "kein Tisch erkannt"}</span>`)}</div>`;
   if (q.game === "cash") return `<div class="tmf idle">${head(`<span class="muted">Rush &amp; Cash: kommt später</span>`)}</div>`;
   const H = q.H, sp = q.sp && !q.sp.cash && q.sp.SH === H ? q.sp : null, cp = parseCards(H.cards), pre = H.street === 0;
