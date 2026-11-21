@@ -5101,7 +5101,14 @@ function spinTrack(raw, t, manual) {
     if (S.n > H.n || (S.n === H.n && S.heroPos !== H.heroPos)) { H.reseat = (H.reseat || 0) + 1; if (H.reseat >= 2) H = vr.sh = fresh(S); }
     else H.reseat = 0;
   }
-  const cur = {}; for (const s of (raw.seats || [])) { if (typeof s.ang !== "number") continue; const sl = ctMatch(H, s); if (sl) cur[sl.pos] = { stack: s.stack, bet: s.bet || 0, cards: s.cards !== false, allin: !!s.allin || (typeof s.stack === "number" && s.stack <= .05) }; }
+  const cur = {}; for (const s of (raw.seats || [])) { if (typeof s.ang !== "number") continue; const sl = ctMatch(H, s); if (!sl) continue;
+    const allin = !!s.allin || (typeof s.stack === "number" && s.stack <= .05); let bet = s.bet || 0, inferred = false;
+    // preflop the chips in front are the starting stack minus what is left: an all-in whose amount next to the chips was not
+    // read (a limp, then "All-in" 50.5 BB, read as no bet) still counts in full
+    if (H.street === 0 && typeof sl.start === "number" && sl.start > 0) {
+      const inf = allin ? sl.start : typeof s.stack === "number" ? sl.start - s.stack : null;
+      if (inf != null && inf > bet + .3 && inf <= sl.start + .05) { bet = Math.round(inf * 100) / 100; inferred = !allin; } }
+    cur[sl.pos] = { stack: s.stack, bet, cards: s.cards !== false, allin, inferred }; }
   if (!cards) { H.noCards = (H.noCards || 0) + 1; if (H.noCards >= 3 && !H.heroFolded) { H.heroFolded = true; ctAct(H, H.heroPos, "fold"); } } else H.noCards = 0;
   // the same cards are back (a popup or an animation hid them): the hero did not fold, take the fold back
   if (cards && cards === H.cards && H.heroFolded) { const acts = H.streets[H.street].acts; for (let i = acts.length - 1; i >= 0; i--) if (acts[i].pos === H.heroPos && acts[i].t === "fold") { acts.splice(i, 1); break; } H.heroFolded = false; H.ver++; }
@@ -5121,18 +5128,30 @@ function spinTrack(raw, t, manual) {
   // fold to: he stays in (a raise or a jam read as a fold left the hero without advice when facing it)
   const maxBet = Math.max(0, ...Object.values(cur).map(c => c.bet || 0));
   const heroActed = H.heroFolded || H.streets[0].acts.some(a => a.pos === H.heroPos), heroOrd = H.order.indexOf(H.heroPos);
+  const badFrame = H.slots.filter(sl => !sl.hero && !sl.folded && cur[sl.pos] && !cur[sl.pos].cards && !cur[sl.pos].allin).length >= 2;
   for (const sl of H.slots) { if (sl.hero || sl.folded) continue; const s = cur[sl.pos]; if (!s) continue;
     if (!s.cards && (s.allin || (s.bet || 0) >= maxBet - .01)) { sl.miss = 0; continue; }
     // preflop, before the hero's first action, a player after him has not had his turn: he cannot have folded
     if (H.street === 0 && !heroActed && H.order.indexOf(sl.pos) > heroOrd) { sl.miss = 0; continue; }
-    // out of the hand: two frames without cards, or one when the hero is to act (the line must be complete then)
-    if (!s.cards) { sl.miss++; if (sl.miss >= 2 || (raw.buttons && cards)) { sl.folded = true; ev.push({ pos: sl.pos, fold: true }); } } else sl.miss = 0; }
+    // out of the hand: two frames without cards, or one when the hero is to act (the line must be complete then), unless
+    // several players lost their cards in the same picture: that picture is bad (an animation, a misread), not two folds
+    if (!s.cards) { sl.miss++; if (sl.miss >= 2 || (raw.buttons && cards && !badFrame)) { sl.folded = true; ev.push({ pos: sl.pos, fold: true }); } } else sl.miss = 0; }
   const decision = !!(raw.buttons && cards), vals = ev;
   const heroDone = H.heroFolded || H.streets[0].acts.some(a => a.pos === H.heroPos), hOrd = H.order.indexOf(H.heroPos);
   for (const sl of H.slots) { if (sl.folded) continue; const s = cur[sl.pos]; if (!s) continue; sl.stack = s.stack;
     if (H.street === 0 && !sl.hero && !heroDone && H.order.indexOf(sl.pos) > hOrd) continue;
     const b = s.bet || 0, have = st.com[sl.pos] || 0;
-    if (b > have + .01) { if (sl.pend && Math.abs(sl.pend.v - b) < .01) sl.pend.n++; else sl.pend = { v: b, n: 1 }; if (sl.pend.n >= 2 || decision) vals.push({ pos: sl.pos, v: b, allin: s.stack <= .05 }); }
+    // the same player cannot act twice in a row: a new amount for the last player who acted, with nobody in between, is a
+    // misread or a correction of his bet. Taken only when it holds for three pictures, and then as his amount, not a new raise
+    // (a raise to 3 read once as 5 became "raises twice", the others "folded" and the hand was lost)
+    const lastA = st.acts.filter(a => !a.est).slice(-1)[0];
+    if (b > have + .01 && lastA && lastA.pos === sl.pos && !sl.hero) {
+      if (sl.pend && Math.abs(sl.pend.v - b) < .01) sl.pend.n++; else sl.pend = { v: b, n: 1 };
+      if (sl.pend.n >= 3) { lastA.to = b; st.com[sl.pos] = b; st.max = Math.max(st.max || 0, b); if (s.allin) { lastA.allin = true; sl.allin = true; } sl.pend = null; H.ver++; }
+      continue; }
+    if (b > have + .01) {
+      // a bet only inferred from the stack needs two pictures even on the hero's turn (a misread stack is not a raise)
+      if (s.inferred && !(sl.pend && Math.abs(sl.pend.v - b) < .01)) { sl.pend = { v: b, n: 1 }; continue; } if (sl.pend && Math.abs(sl.pend.v - b) < .01) sl.pend.n++; else sl.pend = { v: b, n: 1 }; if (sl.pend.n >= 2 || decision) vals.push({ pos: sl.pos, v: b, allin: s.stack <= .05 }); }
     else sl.pend = null; }
   if (ev.length) { const ord = ctOrder(H); ev.sort((x, y) => ord.indexOf(x.pos) - ord.indexOf(y.pos)); for (const e of ev) { if (e.fold) ctAct(H, e.pos, "fold"); else ctCommit(H, [e]); } }
   // the hero is to act preflop: whoever had his turn before him and put nothing in has folded, also when his seat
