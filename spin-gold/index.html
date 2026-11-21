@@ -5137,7 +5137,10 @@ function spinTrack(raw, t, manual) {
   if (ev.length) { const ord = ctOrder(H); ev.sort((x, y) => ord.indexOf(x.pos) - ord.indexOf(y.pos)); for (const e of ev) { if (e.fold) ctAct(H, e.pos, "fold"); else ctCommit(H, [e]); } }
   // the hero is to act preflop: whoever had his turn before him and put nothing in has folded, also when his seat
   // was not read in this picture (without it the line stopped short and no solver node matched)
-  if (decision && H.street === 0 && (H.n === 2 || H.n === 3)) {
+  // not right after the hero's own action: the buttons stay up a moment after his click, and the players after him have
+  // not had their turn yet (a raise read as "everybody folded" lost the re-raise or the all-in that came next)
+  const lastOwn = (() => { const ac = H.streets[0].acts.filter(x => !x.est), l = ac[ac.length - 1]; return !!(l && l.pos === H.heroPos); })();
+  if (decision && !lastOwn && H.street === 0 && (H.n === 2 || H.n === 3)) {
     const game = H.n === 2 ? "hu" : "3h", P = game === "hu" ? ["SB", "BB"] : ["BTN", "SB", "BB"];
     for (let g = 0; g < 3; g++) {
       const nx = P[lineActors(game, spinLine(H).join("-")).next]; if (!nx || nx === H.heroPos) break;
@@ -5157,7 +5160,12 @@ function spinTrack(raw, t, manual) {
   const live = H.slots.filter(sl => !sl.folded && !(sl.hero && H.heroFolded)), withChips = live.filter(sl => !isAllin(sl));
   // everybody else folded: the hand is over (GG shows buttons like "show cards" then), nothing to decide on any street
   const noDecision = (H.street >= 1 && withChips.length <= 1) || !live.some(sl => !sl.hero);
-  H.heroTurn = decision && !noDecision && !(lastAct && lastAct.pos === H.heroPos && !H.streets[H.street].acts.slice(H.streets[H.street].acts.indexOf(lastAct) + 1).some(a => a.pos !== H.heroPos));
+  // up to two pictures without the buttons (misreads) do not end the hero's turn; three in a row or his own action do
+  const wasTurn = H.heroTurn, actsN = H.streets[H.street].acts.length;
+  const holdTurn = !decision && wasTurn && H.turnActs === actsN && (H.turnMiss || 0) < 2 && !!cards;
+  H.turnMiss = decision ? 0 : holdTurn ? (H.turnMiss || 0) + 1 : 0;
+  H.heroTurn = (decision || holdTurn) && !noDecision && !(lastAct && lastAct.pos === H.heroPos && !H.streets[H.street].acts.slice(H.streets[H.street].acts.indexOf(lastAct) + 1).some(a => a.pos !== H.heroPos));
+  if (H.heroTurn) H.turnActs = H.streets[H.street].acts.length;
   return H;
 }
 // ---- early-level advice: which solver node the hero is at ----
@@ -5174,7 +5182,9 @@ function spinLine(H, full) { // preflop actions before the hero's current decisi
     else if (a.t === "raise" || a.t === "bet") { const to = a.to || 0, raised = out.includes("R") || out.includes("r");
       // a raise over a raise is the small 3-bet whatever its size (a missing size maps to the next one the tree has, see ALT_TOK);
       // a first raise above 2.25 BB is the raise to 3 BB, also when it is bigger (it used to count as a minraise)
-      out.push(a.allin || to >= eff * .9 ? "J" : raised ? "T" : to <= 2.25 ? "R" : "r"); }
+      // after an all-in nobody can raise in the solver's tree (equal stacks): a bigger stack going all-in over it, which
+      // puts the others all-in, is a call there ("R-J-J" as "R-J-C", the hero facing two all-ins)
+      out.push(out.includes("J") ? "C" : a.allin || to >= eff * .9 ? "J" : raised ? "T" : to <= 2.25 ? "R" : "r"); }
   }
   if (full && H.street >= 1) {
     const bb = H.slots.find(s => s.pos === "BB"), raised = out.some(t => /[RrJT]/.test(t));
