@@ -324,6 +324,7 @@ body.tm-on { overflow: hidden; }
 .tmf-act .big { font-size: clamp(16px, 3.2vh, 30px); font-weight: 800; padding: 4px 12px; border-radius: 8px; display: inline-block; align-self: flex-start; }
 .tm-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tm-sub { font-size: 11px; color: var(--muted); }
+.tm-note { display: block; margin-top: 6px; font-size: 12px; line-height: 1.35; color: var(--muted); }
 .tm-rows { display: grid; grid-template-columns: 1fr; gap: 1px; }
 .tm-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 3.4em; gap: 6px; align-items: center; font: inherit; font-size: 11px; text-align: left; padding: 1px 4px; border: 0; border-radius: 5px; background: transparent; color: var(--ink); cursor: pointer; }
 .tm-row.same { opacity: .45; }
@@ -5286,6 +5287,7 @@ function cbAdvice(H) {
     else { const keys = avail("vsb").map(x => "b" + x.slice(1)), k = sizeOf(bets[0], keys); if (k) { node = F["vs" + k]; title = `${sp.oopName} gegen ${bets[0].allin ? "All-in" : CB_SIZE_TXT[k]}`; label = title.slice(sp.oopName.length + 1); if (bets[0].allin) note = `Ein All-in ist am Flop nicht gerechnet: genähert mit der größten Größe (${CB_SIZE_TXT[k]}), „All-in“ dort heißt Call.`; } }
   }
   if (sp.altFrom) note = (note ? note + " " : "") + `Die Linie ${sp.altFrom} ist nicht gerechnet: genähert mit ${sp.line}.`;
+  if (sp.proxy) note = (note ? note + " " : "") + sp.proxy;
   if (!node) return { sp, miss: own.length ? "Du hast gesetzt und wurdest erhöht: das ist im gerechneten Baum nicht enthalten." : "Für diese Stelle gibt es keine gerechnete Strategie." };
   const m = LF.mapper(board, nn.key), cp = parseCards(H.cards);
   const dec = b => { const s = atob(b), o = new Float32Array(169); for (let i = 0; i < 169; i++) o[i] = s.charCodeAt(i) / 100; return o; };
@@ -5582,6 +5584,12 @@ async function tmStart() {
     $("tmCam").hidden = true; TM.noStick = true; tmStickWait(); tmRender(true); return;
   }
   $("tmGo").hidden = true; $("tmVid").hidden = true;
+  // the iPad can hold the camera (split screen, another app in front): say so, and carry on when it gives it back
+  const trk = vr.stream && vr.stream.getVideoTracks && vr.stream.getVideoTracks()[0];
+  if (trk) { TM.camPaused = false;
+    trk.onmute = () => { TM.camPaused = true; tmRender(true); };
+    trk.onunmute = () => { TM.camPaused = false; tmRender(true); };
+    trk.onended = () => { if (TM.on && !TM.noStick && vr.stream && vr.stream.getVideoTracks()[0] === trk) setTimeout(() => { if (TM.on && !TM.noStick) tmStart(); }, 1500); }; }
   // the picture stays visible (small) in the bar: Safari delivers no frames of a video in a hidden view
   $("tmCam").appendChild(vid); $("tmCam").hidden = false; vid.play().catch(() => {});
   tmWake(); tmRender(true);
@@ -5629,6 +5637,9 @@ function tmEnd() {
   if (vr.cam) { stopStream(); try { vid.pause(); } catch (e) {} }   // end the recording too (battery)
   mt.mode = "auto";
 }
+// the page has no sound of its own: tell the iPad so, then the camera does not take the audio away from other apps
+// (YouTube, music) that play next to the review (Safari 16.4 and up; elsewhere nothing happens)
+try { if (navigator.audioSession) navigator.audioSession.type = "ambient"; } catch (e) {}
 async function tmWake() { try { if ("wakeLock" in navigator) TM.lock = await navigator.wakeLock.request("screen"); } catch (e) {} }   // screen stays on
 document.addEventListener("visibilitychange", () => { if (TM.on && document.visibilityState === "visible") tmWake(); });
 
@@ -5706,6 +5717,7 @@ function tmRender(force) {
     // tapping cycles the hand-set ranges; after the last one it goes back to the read value
     T.multi = T.multi && k === TM_MULTI.length - 1 && T.multiAuto ? null : TM_MULTI[(k + 1) % TM_MULTI.length][0]; tmRender(true); });
   if (TM.on && TM.noStick) $("tmState").textContent = "Kein Capture-Stick gefunden. Einstecken, die Aufnahme startet dann von selbst.";
+  else if (TM.on && TM.camPaused) $("tmState").textContent = "Das iPad hat den Capture-Stick angehalten (geteilter Bildschirm oder eine andere App vorne). Es geht von selbst weiter, sobald die Review wieder im Vollbild ist.";
   else if (TM.on) $("tmState").textContent = `${vr.cam && vr.camLabel != null ? (vr.camStick ? "Capture-Stick" : "iPad-Kamera (kein Capture-Stick gefunden)") + " · " : ""}${vr.tables.filter(T => T && T.sh).length} Tische mit Hand · Lesezeit ${Math.round(TM.ms)} ms pro Bild${TM.ocr ? "" : TM.ocrLoad ? " · Namen werden geladen" : ""}`;
 }
 function tmRangeLayers(adv, pre) {
@@ -5751,6 +5763,8 @@ function tmField(i) {
       if (ex) rows = `<div class="tm-rows">${EX_TYPES.map(([k, l], ti) => { const e = exAct(ti);
         return `<button type="button" class="tm-row${e.g < .01 ? " same" : ""}${viewTi === ti ? " on" : ""}${tagTi === ti ? " tag" : ""}" data-tmrow="${i}|${ti}"><span>vs ${l}</span>${chip(e.key, e.lab, false)}<span class="num">${e.g >= .01 ? "+" + fmt(Math.round(e.g * 100) / 100) : ""}</span></button>`; }).join("")}</div>`;
     }
+    // what the advice rests on when it is not the exact spot: pot odds, nearest solved depth or line, an assumed range
+    if (adv.note) act += `<span class="tm-note">${String(adv.note).replace(/</g, "&lt;")}</span>`;
   } else if (tr && tr.layers) {
     const L = purify(tr.layers); let g = ""; const v = { layers: L, cev: null };
     for (let k = 0; k < 169; k++) { const [bg, fg] = cellStyle(v, k, false); g += `<div class="mcell${k === tr.idx ? " hero" : ""}${tr.inR && !tr.inR[k] ? " out" : ""}" style="background:${bg};color:${fg}">${handName(k)}</div>`; }
