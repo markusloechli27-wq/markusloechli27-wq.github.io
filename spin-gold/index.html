@@ -5287,7 +5287,11 @@ function spinTrack(raw, t, manual) {
   const isAllin = sl => sl.allin || (cur[sl.pos] && cur[sl.pos].allin) || (typeof sl.stack === "number" && sl.stack <= .05) || (typeof sl.start === "number" && sl.start > 0 && inPot(sl.pos) >= sl.start - .05);
   const live = H.slots.filter(sl => !sl.folded && !(sl.hero && H.heroFolded)), withChips = live.filter(sl => !isAllin(sl));
   // everybody else folded: the hand is over (GG shows buttons like "show cards" then), nothing to decide on any street
-  const noDecision = (H.street >= 1 && withChips.length <= 1) || !live.some(sl => !sl.hero);
+  // After the flop the hand is decided once at most one player has chips left, unless that player is the hero and still
+  // has to call an all-in: that call or fold is his decision (it never showed: facing a shove on the flop gave no advice)
+  const stN = H.streets[H.street], comN = pos => (stN && stN.com && stN.com[pos]) || 0;
+  const heroOwes = Math.max(0, ...live.filter(sl => !sl.hero).map(sl => comN(sl.pos))) > comN(H.heroPos) + .01 && withChips.some(sl => sl.hero);
+  const noDecision = (H.street >= 1 && withChips.length <= 1 && !heroOwes) || !live.some(sl => !sl.hero);
   // up to two pictures without the buttons (misreads) do not end the hero's turn; three in a row or his own action do
   const wasTurn = H.heroTurn, actsN = H.streets[H.street].acts.length;
   const holdTurn = !decision && wasTurn && H.turnActs === actsN && (H.turnMiss || 0) < 2 && !!cards;
@@ -5406,9 +5410,12 @@ function cbAdvice(H) {
   if (!H || H.street !== 1) return null;
   const sp = cbSpot(H); if (!sp) return null;
   const board = (H.streets[1].board || []).slice(0, 3).map(pfCard); if (board.length < 3 || board.some(c => c < 0)) return { sp, miss: "Flop nicht sicher erkannt" };
-  const keys = Object.keys(sp.flops), nn = LF.nearest(board, new Set(keys)); if (!nn) return null;
-  const F = sp.flops[nn.key], heroIP = H.heroPos === sp.ip, pot = H.streets[1].pot || sp.pot;
-  const avail = pre => Object.keys(F).filter(k => k.startsWith(pre) && k.length > pre.length).map(k => "b" + k.slice(pre.length));
+  const keys = Object.keys(sp.flops); let nn = LF.nearest(board, new Set(keys)); if (!nn) return null;
+  let F = sp.flops[nn.key]; const heroIP = H.heroPos === sp.ip, pot = H.streets[1].pot || sp.pot;
+  const avail = pre => Object.keys(F).filter(k => k.startsWith(pre) && k.length > pre.length && !k.endsWith("allin")).map(k => "b" + k.slice(pre.length));
+  // a spot that only flops solved since 22 Nov 2026 have (answers to a raise or an all-in): the nearest flop that has it
+  const has = name => keys.some(k => sp.flops[k][name]);
+  const pick = name => { if (F[name]) return F[name]; const ks = keys.filter(k => sp.flops[k][name]); const n2 = ks.length ? LF.nearest(board, new Set(ks)) : null; if (!n2) return null; nn = n2; F = sp.flops[n2.key]; return F[name]; };
   // the flop line from the bets alone: a check shows nothing on the picture (no chips move), so "no bet yet" is a check
   // by whoever acted before the hero
   const bets = H.streets[1].acts.filter(a => !a.est && (a.t === "bet" || a.t === "raise") && a.pos !== H.heroPos);
@@ -5416,7 +5423,15 @@ function cbAdvice(H) {
   const limp = !sp.aggr, raiserIP = sp.aggr === "ip";
   const sizeOf = (a, keys) => a.allin ? keys.sort((x, y) => (CB_SIZE_PCT[y] || 0) - (CB_SIZE_PCT[x] || 0))[0] : cbSizeKey(a.to, pot, keys);   // an all-in: the biggest solved bet
   let node = null, title = "", label = "", note = "";
-  if (own.length) node = null;   // the hero bet and was raised: not in the solved tree
+  const fa = H.streets[1].acts, raisedAfter = own.length && bets.length && fa.indexOf(bets[bets.length - 1]) > fa.indexOf(own[own.length - 1]);
+  if (own.length && !(own.length === 1 && raisedAfter && !own[0].allin)) node = null;   // more than one raise: not in the solved tree
+  else if (raisedAfter) {   // the hero bet and the other went all-in over it: fold or call
+    const pre = heroIP ? "xr" : "lr", ks = ["bmin", "b33", "b66"].filter(k => has(pre + k)), k = cbSizeKey(own[0].to, pot, ks);
+    if (k) { node = pick(pre + k); title = `${heroIP ? sp.ipName : sp.oopName}: ${CB_SIZE_TXT[k]}, dann All-in gegen dich`; label = "gegen den Raise";
+      if (!bets[bets.length - 1].allin) note = "Gerechnet ist nur der Raise All-in: dein Raise-Gegner hat kleiner erhöht, genähert mit der Antwort auf All-in."; }
+  }
+  else if (!heroIP && bets.length === 1 && bets[0].allin && has("vsallin")) { node = pick("vsallin"); title = `${sp.oopName} gegen All-in`; label = "gegen All-in"; }
+  else if (heroIP && bets.length === 1 && bets[0].allin && has("vslallin")) { node = pick("vslallin"); title = `${sp.ipName} gegen All-in`; label = "gegen All-in"; }
   else if (!heroIP && bets.length === 0) {
     if (F.lead) { node = F.lead; title = limp ? `${sp.oopName}: Bet im Limp-Pot` : `${sp.oopName}: C-Bet out of position`; label = limp ? "Bet oder Check" : "C-Bet"; }
     else { node = { acts: ["check"], f: null }; title = `${sp.oopName}: Check zum Raiser`; label = "Check"; note = "Im gerechneten Baum checkt hier jede Hand zum Raiser."; }
@@ -5433,7 +5448,7 @@ function cbAdvice(H) {
   }
   if (sp.altFrom) note = (note ? note + " " : "") + `Die Linie ${sp.altFrom} ist nicht gerechnet: genähert mit ${sp.line}.`;
   if (sp.proxy) note = (note ? note + " " : "") + sp.proxy;
-  if (!node) return { sp, miss: own.length ? "Du hast gesetzt und wurdest erhöht: das ist im gerechneten Baum nicht enthalten." : "Für diese Stelle gibt es keine gerechnete Strategie." };
+  if (!node) return { sp, miss: raisedAfter ? "Du hast gesetzt und wurdest erhöht: für diese Linie ist noch kein Flop mit der Antwort auf den Raise gerechnet (kommt mit den neu gerechneten Flops)." : own.length ? "Mehrere Raises am Flop: nicht im gerechneten Baum." : "Für diese Stelle gibt es keine gerechnete Strategie." };
   const m = LF.mapper(board, nn.key), cp = parseCards(H.cards);
   const dec = b => { const s = atob(b), o = new Float32Array(169); for (let i = 0; i < 169; i++) o[i] = s.charCodeAt(i) / 100; return o; };
   const f = node.f ? node.f.map(dec) : [new Float32Array(169).fill(1)];
