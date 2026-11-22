@@ -1156,7 +1156,35 @@ function earlyFind(ctx, path, who) {
   }
   return null;
 }
-const altTxt = f => f && f.from ? `An dieser Stelle hat der Solver-Baum ${TOK_NAME[f.from].replace(/^der /, "den ")} nicht; gerechnet als ${TOK_NAME[f.to]}. ` : "";
+const altTxt = f => f && f.from ? `An dieser Stelle hat der Solver-Baum ${TOK_NAME[f.from].replace(/^der /, "den ")} nicht; gerechnet als ${TOK_NAME[f.to]}. ` : f && f.near ? `Die Linie ${f.near} ist nicht im Solver-Baum: gerechnet mit der ähnlichsten Linie ${f.path || "Erste Aktion"}. ` : "";
+// A line the tree does not have even with one size swapped (several unusual sizes, a re-raise war): first every
+// combination of swapped sizes, then the most similar line of the tree at which the hero acts: same pressure on him
+// (nothing, limps, a raise, a 3-bet, an all-in), as many players left, his own earlier action, fewest differences.
+// So every preflop decision gets an answer; the note says what it was taken from.
+function earlySig(game, path) {
+  const t = path ? path.split("-") : [], A = lineActors(game, path), lv = { L: 1, C: 1, R: 2, r: 2, T: 3, J: 4 }, n = game === "hu" ? 2 : 3;
+  const me = A.next, out = Array(n).fill(false); let face = 0, mine = 0;
+  t.forEach((k, i) => { if (k === "F") out[A.who[i]] = true; if (A.who[i] === me) mine = Math.max(mine, lv[k] || 0); else face = Math.max(face, lv[k] || 0); });
+  return { me, face, mine, left: out.filter(x => !x).length };
+}
+function earlyFindNear(ctx, path, who) {
+  const t = path ? path.split("-") : [];
+  if (t.length && t.length <= 7) {   // every combination of the size swaps, fewest swaps first
+    let vs = [[]]; for (const k of t) { const nv = []; for (const v of vs) for (const o of [k, ...(ALT_TOK[k] || [])]) nv.push(v.concat(o)); vs = nv.slice(0, 256); }
+    vs = vs.map(v => ({ v, d: v.filter((x, i) => x !== t[i]).length })).filter(x => x.d > 0).sort((a, b) => a.d - b.d);
+    for (const { v } of vs) { const p2 = v.join("-"), n = earlyNodeC(ctx, p2); if (n && (who == null || n.p === who)) return { n, path: p2, near: path || "Erste Aktion" }; }
+  }
+  const src = ctx.game === "hu" ? ((MR2 || {}).hu || {})[String(ctx.stacks)] : (((MR2 || {})["3h"] || {})[ctx.model] || {})[[].concat(ctx.stacks).join("|")];
+  if (!src) return null;
+  const want = earlySig(ctx.game, path); let best = null, bs = 1e9;
+  const ed = (a, b) => { const x = a ? a.split("-") : [], y = b ? b.split("-") : [], d = Array.from({ length: x.length + 1 }, (_, i) => [i, ...Array(y.length).fill(0)]);
+    for (let j = 1; j <= y.length; j++) d[0][j] = j; for (let i = 1; i <= x.length; i++) for (let j = 1; j <= y.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1)); return d[x.length][y.length]; };
+  for (const p2 of Object.keys(src)) {
+    if (who != null && src[p2].p !== who) continue; const g = earlySig(ctx.game, p2);
+    const sc = Math.abs(g.face - want.face) * 10 + Math.abs(g.left - want.left) * 4 + Math.abs(g.mine - want.mine) * 3 + ed(p2, path);
+    if (sc < bs) { bs = sc; best = p2; } }
+  if (best == null) return null; const n = earlyNodeC(ctx, best); return n ? { n, path: best, near: path || "Erste Aktion" } : null;
+}
 // behind a line the solver never plays by itself (it was solved with an assumed range): say which and how
 function earlyLockTxt(ctx, lk) {
   const t = lk.split("-"), pre = earlyNodeC(ctx, t.slice(0, -1).join("-")), w = pre ? earlyWho(ctx.game, pre.p) : "Spieler";
@@ -2098,7 +2126,8 @@ const LR = (() => {
       return dollars(gl, R);
     }
     function titleBuyin() {
-      const [x0, y0, x1, y1] = rel(0, 0, .5, .05), Rt = vidLum(im, x0, y0, x1 - x0, y1 - y0); if (!Rt) return null;
+      // left part only: the blinds further right ("Blinds 15 | 30") were read as a buy-in of $30
+      const [x0, y0, x1, y1] = rel(0, 0, .45, .05), Rt = vidLum(im, x0, y0, x1 - x0, y1 - y0); if (!Rt) return null;
       // grey text, dimmer in a window without focus: brighter than the bar by about half the text contrast
       const th = Rt.bg + .45 * (Rt.t - Rt.bg); if (Rt.t - Rt.bg < 40) return null;
       const gl = comps(im, mask(im, (r, g, b) => .299 * r + .587 * g + .114 * b > th, x0, y0, x1, y1), 4).filter(c => c.h < .045 * im.h);
@@ -4951,15 +4980,34 @@ function mtBtnHint(fc, k, i) {
     for (let p = 0; p < d.length; p += 16) { tot++; if (d[p] > 140 && d[p + 1] < 95 && d[p + 2] < 95 && d[p] - d[p + 1] > 70) n++; }
     return tot && n / tot > .12 ? 1 : 0; } catch (e) { return 0; }
 }
-// prize and buy-in of each table: the buy-in (title) is the same session-wide, the prize (on the felt) holds for one
-// spin; a new value counts after it was read twice in a row, so one misread glyph changes nothing
+// Multiplier of each table = prize on the felt / buy-in. The title's buy-in was often not read or read as the blinds
+// ("15 | 30" gave $30), and a prize misread in one layout stuck to the table for every later spin, so most tables
+// showed the default. Now:
+// - a new spin in a window (three equal starting stacks of 15, 20 or 25 BB) clears that table's prize and multiplier,
+//   also one set by hand (each spin has its own);
+// - a prize counts after three identical reads in a row, and only if it fits a GG multiplier for some buy-in;
+// - the buy-in is the GG buy-in that turns the most prizes seen this session into GG multipliers (most spins are x2),
+//   the title's value only decides a tie.
+const GG_BUYINS = [0.25, 0.5, 1, 2, 3, 5, 7, 10, 15, 25, 30, 50, 60, 100, 150, 250, 300, 500, 1000];
+function mtBuyin() {
+  const ps = Object.entries(mt.prizes || {}).map(([p, n]) => [+p, n]); if (!ps.length) return;
+  let best = null, bs = -1;
+  for (const b of GG_BUYINS) { const sc = ps.reduce((a, [p, n]) => a + (multiOf(p, b) ? n : 0), 0) + (mt.buyinTitle === b ? .5 : 0) + (ps.some(([p]) => multiOf(p, b) === 2) ? .25 : 0);
+    if (sc > bs) { bs = sc; best = b; } }
+  if (best != null && bs >= 1) mt.buyin = best;
+  for (const T of vr.tables) if (T) T.multiAuto = T.prize && mt.buyin ? multiOf(T.prize, mt.buyin) : null;
+}
 function mtPrize(i, r) {
   if (!r || !r.ok || !r.raw) return;
-  if (r.raw.buyin) mt.buyin = r.raw.buyin;
-  const p = r.raw.prize; if (!p) return;
-  const T = mtTableState(i);
-  const b = mt.buyin, m = b ? multiOf(p, b) : null; if (b && !m) return;   // a prize that fits no multiplier is a misread
-  if (T.prizeCand === p) { T.prize = p; if (m) T.multiAuto = m; } T.prizeCand = p;
+  const T = mtTableState(i), now = typeof mtClock === "function" ? mtClock() : performance.now(), S = r.raw.seats || [];
+  if (S.length === 3 && !(r.raw.board >= 3)) { const tot = S.map(x => (typeof x.stack === "number" ? x.stack : NaN) + (x.bet || 0)), v = tot[0];
+    if (tot.every(x => Math.abs(x - v) <= .3) && [15, 20, 25].some(z => Math.abs(v - z) <= .3) && !(T.freshAt && now - T.freshAt < 90000)) {
+      T.freshAt = now; T.multi = null; T.multiAuto = null; T.prize = null; T.prizeCand = null; T.prizeN = 0; } }
+  if (r.raw.buyin && GG_BUYINS.includes(r.raw.buyin)) { if (mt.buyinCand === r.raw.buyin) mt.buyinN = (mt.buyinN || 0) + 1; else { mt.buyinCand = r.raw.buyin; mt.buyinN = 1; }
+    if (mt.buyinN >= 3 && mt.buyinTitle !== r.raw.buyin) { mt.buyinTitle = r.raw.buyin; mtBuyin(); } }
+  const p = r.raw.prize; if (!p || !GG_BUYINS.some(b => multiOf(p, b))) return;   // a prize that fits no multiplier is a misread
+  if (T.prizeCand === p) T.prizeN = (T.prizeN || 0) + 1; else { T.prizeCand = p; T.prizeN = 1; }
+  if (T.prizeN >= 3 && T.prize !== p) { T.prize = p; mt.prizes = mt.prizes || {}; mt.prizes[p] = (mt.prizes[p] || 0) + 1; mtBuyin(); }
 }
 function mtValid(r) { return !!(r && r.ok && r.raw && r.raw.seats.length >= 2 && r.raw.seats.some(s => s.dealer) && r.raw.hy > .5 && r.raw.hx > .12 && r.raw.hx < .88); }
 function mtReadAll(fc, k, opts) { const n = MT_LAYOUTS[k].length, tm = typeof TM !== "undefined" && TM.on; return MT_LAYOUTS[k].map((_, i) => n === 1 ? LR.read(fc, opts) : tm ? tmRead(i, mtCrop(fc, k, i), opts) : LR.read(mtCrop(fc, k, i), opts)); }
@@ -5005,7 +5053,7 @@ function mtRun(i, fn) { // run the single-table logic with table i's own state
     if (added) { renderTimeline(); if (vr.cur && vr.cur.table === i) renderVPanel(vr.cur); }
   }
 }
-function mtReset() { vr.tables = []; mt.over = {}; mt.lastWin = null; mt.slots = null; mt.rectsUsed = null; vr.multi = false; vr.liveMsgs = []; mt.layout = mt.mode === "auto" ? "1" : mt.mode; mt.checkedAt = -1e9; mt.misses = 0; mtOverlay(); }
+function mtReset() { mt.prizes = {}; mt.buyin = null; mt.buyinTitle = null; mt.buyinCand = null; vr.tables = []; mt.over = {}; mt.lastWin = null; mt.slots = null; mt.rectsUsed = null; vr.multi = false; vr.liveMsgs = []; mt.layout = mt.mode === "auto" ? "1" : mt.mode; mt.checkedAt = -1e9; mt.misses = 0; mtOverlay(); }
 // tests replay a recording faster than real time: MT_CLOCK (ms of video) stands in for the clock there
 function mtClock() { return window.MT_CLOCK != null ? window.MT_CLOCK : performance.now(); }
 async function readFrameTables(fc, t, manual, opts) {
@@ -5361,22 +5409,24 @@ function earlyAdvice(H, mvO) {   // mvO: multiplier of this table (table mode), 
   }
   // push/fold only knows all-in or fold: after a limp or a raise (even with tiny stacks) the solver's shortest solved
   // stack is the nearest answer, e.g. a limp and an all-in from a 1.5 BB big blind
-  if (eff < lim && !/[LRrT]/.test(path)) return { pushfold: true, eff, lim };
+  // below the push/fold limit the push/fold chart answers (exact stacks); the tree answer at the shortest solved stack
+  // comes along, so the field never stays empty when the chart has no verdict
+  const pfOnly = eff < lim && !/[LRrT]/.test(path);
   const st = p => { const sl = H.slots.find(s => s.pos === p); return sl ? sl.start : eff; };
   const ctx = game === "hu" ? { game, model: "cev", stacks: nearestOf(EARLY_HU(), eff) } : { game, model, stacks: earlySnap(model, ["BTN", "SB", "BB"].map(p => Math.min(st(p), Math.max(...["BTN", "SB", "BB"].filter(x => x !== p).map(st))))) };
   const S = game === "hu" ? ctx.stacks : nearestOf(EARLY_G(model), eff);
   const heroP = game === "hu" ? (H.heroPos === "SB" ? 0 : 1) : ["BTN", "SB", "BB"].indexOf(H.heroPos);
-  const fd = earlyFind(ctx, path, heroP);   // the same lookup as the range charts: sizes the tree lacks map to the next one
-  if (!fd) return { miss: true, eff, S, path, game };
+  const fd = earlyFind(ctx, path, heroP) || earlyFindNear(ctx, path, heroP);   // as the range charts; else the most similar line
+  if (!fd) return pfOnly ? { pushfold: true, eff, lim } : { miss: true, eff, S, path, game };
   const n = fd.n, line = lineText(game, path), spot = (EARLY_SPOTS[game] || []).find(x => x.path === fd.path);
   const idx = H.cards ? (parseCards(H.cards) || {}).idx : null;
   const ev = earlyViewC(ctx, { path: fd.path });
   // a line the solver never takes (someone, often the hero, left GTO earlier): the node still has the solver's answer
   // for every hand against the opponents' ranges there, so show it, marked as an estimate, instead of nothing
-  const note = [ev && ev.empty ? `${line}: ${ev.empty}. Die Werte sind die Antwort des Solvers für deine Hand an dieser Stelle, eine Näherung.` : "",
+  const note = [altTxt(fd).trim(), ev && ev.empty ? `${line}: ${ev.empty}. Die Werte sind die Antwort des Solvers für deine Hand an dieser Stelle, eine Näherung.` : "",
     eff < lo - .01 ? `Effektiv ${String(Math.round(eff * 10) / 10).replace(".", ",")} BB: gerechnet mit ${String(lo).replace(".", ",")} BB, dem kürzesten gelösten Stack. Eine Näherung.` : ""].filter(Boolean).join(" ") || null;
   const freqs = n.acts.map((a, k) => ({ a, v: idx != null ? n.f[k][idx] : null })).filter(x => x.v == null || x.v > .005);
-  return { game, S, path: fd.path, line, alt: altTxt(fd), eff, ctx, node: n, view: ev, spot, idx, freqs, note, title: spot ? spot.title : `${H.heroPos} nach ${line}` };
+  return { game, S, path: fd.path, line, alt: altTxt(fd), eff, ctx, node: n, view: ev, spot, idx, freqs, note, title: spot ? spot.title : `${H.heroPos} nach ${line}`, pushfold: pfOnly || undefined, lim };
 }
 // open the same line and stacks in the range charts
 function chartLink(adv) { return `<a href="#charts" data-chartlink="${encodeURIComponent(JSON.stringify({ g: adv.game, m: adv.ctx.model, s: adv.ctx.stacks, p: adv.path }))}">im Chart öffnen</a>`; }
@@ -5911,7 +5961,7 @@ function tmField(i) {
   const ex = adv && adv.view && adv.game && mlt !== "10" && mlt !== "50" && mlt !== "jp" ? exNode(adv.game, adv.S, adv.path) : null;
   const opTags = [...new Set(H.slots.filter(sl => !sl.hero && !sl.folded).map(sl => tmTagOf(T, sl)).filter(Boolean))];
   const tagTi = opTags.length ? EX_TYPES.findIndex(t => t[0] === opTags[0]) : -1, viewTi = TM.view[i] != null ? TM.view[i] : null;
-  if (adv && (adv.view || adv.f)) {
+  if (adv && (adv.view || adv.f) && !(adv.pushfold && sp && sp.ev && !sp.ev.skip)) {
     let L = purify(tmRangeLayers(adv, pre && !(adv.f && !adv.view))); const rest = adv.view ? adv.view.rest : adv.acts && adv.acts.includes("check") ? "Check" : "Fold";
     const gtoL = L, showTi = viewTi != null ? viewTi : null;
     if (ex && showTi != null) L = exLayers(ex, showTi);
