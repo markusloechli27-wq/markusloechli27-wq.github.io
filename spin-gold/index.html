@@ -1880,7 +1880,9 @@ const LR = (() => {
     for (const it of sp.items) {
       if (it === ".") { s += "."; continue; }
       const vc = R && VID && vidClassify(vidFeat(im, R, rf.X0 + it.x0, rf.Y0 + it.y0, it.w, it.h), "digit");
-      if (vc && vc.s >= .9 && vc.ch === "B") return null;
+      // "B" inside the number is an 8 when the unit "BB" follows anyway or it comes right after the decimal point ("2.8 BB"
+      // read as "2.B" lost the seat, the table became heads-up and the hero's decision got the wrong position)
+      if (vc && vc.s >= .9 && vc.ch === "B") { if (s.endsWith(".") || sp.unit.length >= 2) { s += "8"; conf = Math.min(conf, .05); continue; } return null; }
       if (vc && vc.s >= .9) { conf = Math.min(conf, vc.margin + .2); s += vc.ch; continue; }
       const c = classify(feat(it, rf.W), "digit");
       if (c.s < .55) return null;
@@ -1984,6 +1986,9 @@ const LR = (() => {
       for (let y = Math.max(0, y0 | 0); y < Math.min(im.h, y1 | 0); y += 2) for (let x = Math.max(0, x0 | 0); x < Math.min(W, x1 | 0); x += 2) { const k = (y * W + x) * 4; n++; if (felt(im.d[k], im.d[k + 1], im.d[k + 2])) f++; } return n ? f / n : 0; };
     for (const b of betLines) {
       if (feltFrac(b) < .18 || inZone(b)) continue;
+      // the hero's bet lies above his cards (about 68 % down the window); lower down are his cards, whose two spade or club
+      // symbols can read as a number ("4") and gave him a bet he never made
+      if (winLike && b.cy > .735 * im.h) continue;
       let bi = -1, bd = 1e9; seats.forEach((s, i) => { const dd = Math.hypot(b.cx - s.cx, b.cy - s.cy); if (dd < bd) { bd = dd; bi = i; } });
       // a bet lies between the seat and the middle: the hero's straight above the stack, the others about level with it
       const s = bi >= 0 && seats[bi], inLane = s && (s.cy > .6 * im.h ? Math.abs(b.cx - s.cx) < 3.5 * dh : Math.abs(b.cy - s.cy) < 4.5 * dh);
@@ -2009,9 +2014,10 @@ const LR = (() => {
     // Reference: the hero's own stack (in the hand whenever it matters); the player to act shows his stack in white,
     // so the brightest stack would be a bad yardstick. Folded: about 110, in the hand: 160 to 200.
     const lumRef = seats[hero].lum || Math.max(0, ...seats.map(s => s.lum || 0));
+    const backsAt = seats.map(s => backs.some(c => Math.abs(c.cx - s.cx) < 5 * dh && c.cy < s.cy - .5 * dh && c.cy > s.cy - 10 * dh));
     const hasCards = seats.map((s, i) => {
       if (i === hero || s.allin) return true;
-      const backsSeen = backs.some(c => Math.abs(c.cx - s.cx) < 5 * dh && c.cy < s.cy - .5 * dh && c.cy > s.cy - 10 * dh);
+      const backsSeen = backsAt[i];
       if (backsSeen || !winLike || !s.lum || !lumRef) return backsSeen;
       return s.lum >= .75 * lumRef;
     });
@@ -2019,10 +2025,10 @@ const LR = (() => {
     // (four-colour deck). Requiring the suit below keeps out bet amounts, names and the big rank in the card's middle.
     const textBoxes = betLines.map(b => ({ x0: b.cx - 3.2 * b.H, x1: b.cx + 3.2 * b.H, y0: b.cy - .9 * b.H, y1: b.cy + .9 * b.H }));
     const inText = c => textBoxes.some(q => c.cx > q.x0 && c.cx < q.x1 && c.cy > q.y0 && c.cy < q.y1);
-    function corners(x0, y0, x1, y1, skip) {
+    function corners(x0, y0, x1, y1, skip, anyText) {
       // white on a coloured face: the thin glyphs come out tinted by the face colour (pink, light green), so only the
       // weakest channel has to be bright
-      const cs = comps(im, mask(im, (r, g, b) => Math.min(r, g, b) > 150, x0, y0, x1, y1), 12).filter(c => !inText(c) && !(skip && skip(c)));
+      const cs = comps(im, mask(im, (r, g, b) => Math.min(r, g, b) > 150, x0, y0, x1, y1), 12).filter(c => (anyText || !inText(c)) && !(skip && skip(c)));
       const rk = cs.filter(c => c.h >= .75 * dh && c.h <= 2.6 * dh && c.w <= 1.2 * c.h).sort((a, b) => a.x0 - b.x0);   // corner ranks: about 1.2 digit heights in the desktop client, up to 2 on the phone
       const used = new Set(), out = [];
       for (const c of rk) {
@@ -2142,7 +2148,10 @@ const LR = (() => {
     // 5) hero cards: the two card corners above the hero's nameplate
     const hs = seats[hero];
     let heroCards = null;
-    { const hc = corners(hs.cx - 7 * dh, hs.cy - 13 * dh, hs.cx + 7 * dh, hs.cy - 1.4 * dh).sort((a, b) => a.x0 - b.x0);
+    { let hc = corners(hs.cx - 7 * dh, hs.cy - 13 * dh, hs.cx + 7 * dh, hs.cy - 1.4 * dh).sort((a, b) => a.x0 - b.x0);
+      // the two spade symbols of black cards can read as a number ("4") whose text box then hides the suits: without the
+      // text boxes the rank-over-suit test alone keeps out real amounts
+      if (hc.filter(c => c.card).length < 2) { const h2 = corners(hs.cx - 7 * dh, hs.cy - 13 * dh, hs.cx + 7 * dh, hs.cy - 1.4 * dh, null, true).sort((a, b) => a.x0 - b.x0); if (h2.filter(c => c.card).length >= 2) hc = h2; }
       LR_DBG.heroCorners = hc.map(c => [c.card, c.rank, c.suit, Math.round(c.x0), Math.round(c.y0)]);
       if (hc.length >= 2) {
         const pair = hc.length === 2 ? hc : (() => { let best = null; for (let i = 0; i < hc.length; i++) for (let j = i + 1; j < hc.length; j++) {   // two corners level with each other
@@ -2161,7 +2170,7 @@ const LR = (() => {
     const out = {
       game: seats.length <= 3 ? "spin_gold" : "rush_cash", name: null, unit, sb: unit === "bb" ? .5 : null, bb: unit === "bb" ? 1 : null, multi: prize && buyin ? multiOf(prize, buyin) : null, prize, buyin,
       hero_cards: heroCards, buttons, board, board_cards: boardCards, pot, hx: hs.cx / W, hy: hs.cy / im.h,
-      seats: seats.map((s, i) => ({ ang: ((Math.atan2(s.cy - Cy, s.cx - Cx) * 180 / Math.PI) + 360) % 360, hero: i === hero, stack: s.val, bet: bets[i], dealer: i === dealer, cards: hasCards[i], label: "",
+      seats: seats.map((s, i) => ({ ang: ((Math.atan2(s.cy - Cy, s.cx - Cx) * 180 / Math.PI) + 360) % 360, hero: i === hero, stack: s.val, bet: bets[i], dealer: i === dealer, cards: hasCards[i], backs: i === hero ? null : backsAt[i], label: "",
         nb: { x: (s.cx - 4.6 * s.H) / W, y: (s.cy - 2.55 * s.H) / im.h, w: 9.2 * s.H / W, h: 1.6 * s.H / im.h } })),   // the name sits on the line above the stack
     };
     const issues = [];
@@ -3345,15 +3354,16 @@ function handleRead(r, t, manual) {
     else if (sp.cards && (!raw.hero_cards || raw.hero_cards !== sp.cards)) setAct(sp, "fold");   // unreadable cards are no fold
     else if (t - sp.t > 10) vr.pending = null;
   }
-  if (raw.buttons && !post && (raw.hero_cards || !vr.multi)) {   // single table: a decision without readable cards can get them from the picker
-    const key = (raw.hero_cards || "?") + "|" + raw.seats.map(s => Math.round((s.stack + (s.bet || 0)) * 2)).sort((a, b) => a - b).join(",");
+  const retro = !!(SH && SH.retroNow);   // a decision the hero made without the buttons being seen (spinTrack holds his action back)
+  if ((raw.buttons || retro) && !post && (raw.hero_cards || retro || !vr.multi)) {   // single table: a decision without readable cards can get them from the picker
+    const key = (raw.hero_cards || (retro && SH.cards) || "?") + (retro ? "|r|" + SH.turnLine : "") + "|" + raw.seats.map(s => Math.round(((s.stack || 0) + (s.bet || 0)) * 2)).sort((a, b) => a - b).join(",");
     // the same decision seen again with one seat misread for a frame: no new spot (a new spot needs other cards or the
     // hero's chips changed)
     const hs0 = heroOf(raw), pend = vr.pending, tot = s => s ? (s.stack || 0) + (s.bet || 0) : null;
     if (key !== vr.lastKey && pend && !pend.cash && pend.cards && pend.cards === raw.hero_cards && t - pend.t < 15 && hs0 && pend.start != null && Math.abs(tot(hs0) - pend.start) < .06) { vr.lastKey = key; vLive("Du bist am Zug", true); return; }
     if (key !== vr.lastKey) {
       vr.lastKey = key;
-      const sp = spotFromRaw(raw, t); sp.SH = SH; sp.early = SH ? earlyAdvice(SH, vr.multi ? mtMulti(vr.tables[vr.curTable]) : null) : null; vr.spots.push(sp); vr.pending = sp; vr.cur = sp;
+      const sp = spotFromRaw(raw, t); sp.SH = SH; if (retro) { sp.retro = true; if (!sp.cards) sp.cards = SH.cards; } sp.early = SH ? earlyAdvice(SH, vr.multi ? mtMulti(vr.tables[vr.curTable]) : null) : null; vr.spots.push(sp); vr.pending = sp; vr.cur = sp;
       renderVPanel(sp); renderTimeline();
       vLive(`Entscheidung bei ${tFmt(t)} erkannt`, true);
       if (!vr.cam && $("vPause").checked && !manual && !(sp.ev && sp.ev.skip)) vid.pause();
@@ -4890,6 +4900,20 @@ function mtFindWindows(src) {
     hw = Math.min(hw, SH - q.y0);
     for (let i = 0; i < n; i++) rects.push([(q.a + i * w) / SW, q.y0 / SH, w / SW, hw / SH]);
   }
+  // a box whose shape is no table window (the GG lobby's dark bars next to a title bar, two touching title bars split in
+  // the wrong place) takes the size of the well-shaped windows and the column of the nearest one: GG tiles its tables in
+  // a grid of equal windows. Size and columns from this picture, else from the windows seen before
+  { const asp = r => (r[2] * src.width) / (r[3] * src.height), okShape = r => asp(r) >= 1.25 && asp(r) <= 1.55;
+    const good = rects.filter(okShape);
+    if (good.length) mt.winSize = [good.map(r => r[2]).sort((a, b) => a - b)[good.length >> 1], good.map(r => r[3]).sort((a, b) => a - b)[good.length >> 1]];
+    const ref = mt.winSize;
+    if (ref) {
+      const cols = []; for (const r of good.concat(mt.slots || [])) if (r && Math.abs(r[2] - ref[0]) < .1 * ref[0] && !cols.some(c => Math.abs(c - r[0]) < .02)) cols.push(r[0]);
+      // only boxes about as big as a window: smaller dark bars stay what they are (the size filter below drops them)
+      for (let i = 0; i < rects.length; i++) { const r = rects[i]; if (okShape(r) || r[2] < .9 * ref[0] || r[3] < .6 * ref[1]) continue;
+        const cx = r[0] + r[2] / 2; let x = r[0], bd = .5 * ref[0];
+        for (const c of cols) { const d = Math.abs(c + ref[0] / 2 - cx); if (d < bd) { bd = d; x = c; } }
+        rects[i] = [x, r[1], ref[0], Math.min(ref[1], 1 - r[1])]; } } }
   // much smaller boxes next to real windows are other dark bars (taskbar search, toolbars)
   const mh = rects.length ? rects.map(r => r[3]).sort((p, q) => p - q)[rects.length >> 1] : 0;
   // the same window found twice (its title bar split into two bands): keep one
@@ -4950,12 +4974,23 @@ function mtDetect(fc, opts) {
   if (!(win.length >= 2 || (old && old.length >= 2))) for (const k of ["4", "2h", "2v", "1"]) cands.push([k, null]);
   for (const [k, rects] of cands) {
     if (rects) MT_LAYOUTS.win = rects;
-    const rs = mtReadAll(fc, k, opts), n = rs.filter(mtValid).length, score = n * 10 - MT_LAYOUTS[k].length + (k === "win" ? 5 : 0);   // found windows beat a fixed grid
+    // found windows beat a fixed grid; between two sets of windows that read as many tables, the one that reads more
+    // seats (a box too wide cuts a seat off), then the one in use
+    // a box that is not shaped like a GG table window (a window cut off at one side) is read like a whole screen and finds
+    // seats anywhere: its tables do not count (a cut-off window "read more seats" and won, and a hand became heads-up)
+    const aspOk = r => { const a = r[2] * fc.width / (r[3] * fc.height); return a > 1.25 && a < 1.5; };
+    const rs = mtReadAll(fc, k, opts), ok = rs.filter((r, i) => mtValid(r) && (!rects || !rects[i] || aspOk(rects[i]))), n = ok.length, seats = ok.reduce((a, r) => a + r.raw.seats.length, 0);
+    const score = n * 10 - MT_LAYOUTS[k].length + (k === "win" ? 5 : 0) + .2 * seats + (rects && rects === old ? .1 : 0);
     if (n > 0 && score > bestScore) { bestScore = score; best = { layout: k, reads: rs, rects }; }
   }
   // no windows for a moment (a dialog, the lobby): the windows in use stay, so the tables keep their hands and the
   // reading goes on (deleting them while the layout was "win" broke every frame until the windows came back)
-  if (best && best.rects) { MT_LAYOUTS.win = best.rects; mt.lastWin = best.rects; } else if (!win.length) { if (mt.layout !== "win") delete MT_LAYOUTS.win; else if (mt.lastWin) MT_LAYOUTS.win = mt.lastWin; } else MT_LAYOUTS.win = win;
+  // nothing reads at all (a win animation, cards being dealt): the windows that read last stay. Windows found in a
+  // picture where no table reads are unproven: the GG lobby next to a table gives a title bar too wide and too high,
+  // and switching to them lost every hand of the last table for half a minute
+  if (best && best.rects) { MT_LAYOUTS.win = best.rects; mt.lastWin = best.rects; }
+  else if (mt.layout === "win" && mt.lastWin) MT_LAYOUTS.win = mt.lastWin;
+  else if (!win.length) delete MT_LAYOUTS.win; else MT_LAYOUTS.win = win;
   return best;
 }
 function mtTableState(i) { return vr.tables[i] || (vr.tables[i] = { pending: null, lastKey: null, gRun: 0, gLast: null, game: null, seatHist: [], hand: null, cand: null }); }
@@ -4971,8 +5006,10 @@ function mtRun(i, fn) { // run the single-table logic with table i's own state
   }
 }
 function mtReset() { vr.tables = []; mt.over = {}; mt.lastWin = null; mt.slots = null; mt.rectsUsed = null; vr.multi = false; vr.liveMsgs = []; mt.layout = mt.mode === "auto" ? "1" : mt.mode; mt.checkedAt = -1e9; mt.misses = 0; mtOverlay(); }
+// tests replay a recording faster than real time: MT_CLOCK (ms of video) stands in for the clock there
+function mtClock() { return window.MT_CLOCK != null ? window.MT_CLOCK : performance.now(); }
 async function readFrameTables(fc, t, manual, opts) {
-  let reads = null; const now = performance.now(), t0 = now;
+  let reads = null; const now = mtClock(), t0 = performance.now();
   if (mt.mode === "auto") {
     // without found windows, look for them every 2 s (cheap): a recording that starts with a dialog over the tables
     // must not stay on a whole-screen read for the next 20 s
@@ -5008,10 +5045,11 @@ async function readFrameTables(fc, t, manual, opts) {
     else {
       reads = new Array(n).fill(undefined); mt.readAt = mt.readAt || [];
       const order = [...Array(n).keys()].map(i => ({ i, btn: mtBtnHint(fc, k, i), age: now - (mt.readAt[i] || -1e9) })).sort((a, b) => (b.btn - a.btn) || (b.age - a.age));
-      const tb = performance.now(), budget = vr.cam ? 450 : 300;
+      const tb = performance.now(), budget = window.MT_NOBUDGET ? 1e9 : vr.cam ? 450 : 300;
+      let nr = 0;   // tests: MT_MAXREADS emulates a slower device, so many tables per picture (the ones with buttons always)
       for (const o of order) {
-        if (performance.now() - tb > budget && !o.btn) break;
-        reads[o.i] = tm ? tmRead(o.i, mtCrop(fc, k, o.i), opts) : LR.read(mtCrop(fc, k, o.i), opts); mt.readAt[o.i] = performance.now();
+        if ((performance.now() - tb > budget || (window.MT_MAXREADS && nr >= window.MT_MAXREADS)) && !o.btn) break; nr++;
+        reads[o.i] = tm ? tmRead(o.i, mtCrop(fc, k, o.i), opts) : LR.read(mtCrop(fc, k, o.i), opts); mt.readAt[o.i] = mtClock();
         await new Promise(r => setTimeout(r, 0));
       }
     } }
@@ -5078,6 +5116,16 @@ function spinSeats(raw, prevHeroPos) {
   return { n: 2, seats: out, heroPos: out[0].pos, notes: [], order: ["SB", "BB"] };
 }
 const postOrderOf = H => H.n === 2 ? ["BB", "SB"] : CASH.POST_ORDER.filter(p => H.slots.some(s => s.pos === p));
+// the hero still has something to decide after this line: he is in, somebody else is in, and he has not acted yet or
+// somebody raised after his last action (lineActors alone wraps around a closed line, "F-F" gives the big blind again)
+function spinHeroOpen(game, path, hi) {
+  const t = path ? path.split("-") : [], A = lineActors(game, path), n = game === "hu" ? 2 : 3, inn = Array(n).fill(true);
+  t.forEach((k, i) => { if (k === "F") inn[A.who[i]] = false; });
+  if (!inn[hi] || !inn.some((v, i) => v && i !== hi)) return false;
+  let last = -1; t.forEach((k, i) => { if (A.who[i] === hi) last = i; });
+  if (last < 0) return true; if (t[last] === "J") return false;
+  return t.slice(last + 1).some((k, j) => A.who[last + 1 + j] !== hi && /^[RrTJ]$/.test(k));
+}
 // track the whole hand of a spin table from the frames (folds, bets, streets, board); no evaluation here
 function spinTrack(raw, t, manual) {
   // two seats almost on top of each other: a misread frame (a window moving, a popup), not a table of three
@@ -5092,33 +5140,75 @@ function spinTrack(raw, t, manual) {
     vr.shCand = vr.shCand && vr.shCand.cards === cards ? { cards, n: vr.shCand.n + 1 } : { cards, n: 1 };
     if (vr.shCand.n >= 2 || manual || raw.buttons) { if (H) { H.done = true; hhLog(H, S); } H = vr.sh = fresh(S); vr.shCand = null; }
   }
+  if (H && H.done && H.dealClosed && cards && cards === H.cards) { H.done = false; H.dealClosed = false; H.dealMoved = 0; }
   if (!H || H.done) return H;
+  H.nf = (H.nf || 0) + 1;   // pictures of this hand so far
   if (cards && cards === H.cards) H.seenAt = performance.now();   // the field drops the hand when the table is gone (see tmField)
   // the hand was set up from a bad first picture (a seat not read, so heads-up instead of three, or the hero in the
   // wrong blind): while the hero has not acted, two pictures with the dealer button that disagree set it up again
   if (H.street === 0 && S && cards === H.cards && (raw.seats || []).some(s => s.dealer) && !H.streets[0].acts.some(a => a.pos === H.heroPos && !a.est)) {
     // nobody leaves during a hand: fewer seats read means a seat was not read, never a reason to set it up again
-    if (S.n > H.n || (S.n === H.n && S.heroPos !== H.heroPos)) { H.reseat = (H.reseat || 0) + 1; if (H.reseat >= 2) H = vr.sh = fresh(S); }
-    else H.reseat = 0;
+    // more seats than the hand has: pictures with a seat missing in between do not count against it, and on the hero's
+    // turn one such picture is enough (a seat lost at the start made the hero's first decision heads-up)
+    if (S.n > H.n || (S.n === H.n && S.heroPos !== H.heroPos)) { H.reseat = (H.reseat || 0) + 1; if (H.reseat >= 2 || (S.n > H.n && raw.buttons)) H = vr.sh = fresh(S); }
+    else if (S.n === H.n) H.reseat = 0;
   }
   const cur = {}; for (const s of (raw.seats || [])) { if (typeof s.ang !== "number") continue; const sl = ctMatch(H, s); if (!sl) continue;
     const allin = !!s.allin || (typeof s.stack === "number" && s.stack <= .05); let bet = s.bet || 0, inferred = false;
     // preflop the chips in front are the starting stack minus what is left: an all-in whose amount next to the chips was not
     // read (a limp, then "All-in" 50.5 BB, read as no bet) still counts in full
-    if (H.street === 0 && typeof sl.start === "number" && sl.start > 0) {
+    if (H.street === 0 && !((raw.board || 0) >= 3) && typeof sl.start === "number" && sl.start > 0) {   // not once the flop is out: the chips went to the pot
       const inf = allin ? sl.start : typeof s.stack === "number" ? sl.start - s.stack : null;
-      if (inf != null && inf > bet + .3 && inf <= sl.start + .05) { bet = Math.round(inf * 100) / 100; inferred = !allin; } }
-    cur[sl.pos] = { stack: s.stack, bet, cards: s.cards !== false, allin, inferred }; }
+      // chips in front and stack must add up to the starting stack: when they do not (a 3 read as 8), the stack decides
+      if (inf != null && Math.abs(inf - bet) > .3 && inf <= sl.start + .05 && inf > -.05) { bet = Math.max(0, Math.round(inf * 100) / 100); inferred = !allin; } }
+    cur[sl.pos] = { stack: s.stack, bet, cards: s.cards !== false, backs: s.backs != null ? !!s.backs : s.cards !== false, allin, inferred, dealer: !!s.dealer }; }
+  // the dealer button at another seat in two pictures while the hero holds no cards of this hand: the next hand is being
+  // dealt. This one is over (its blinds were written into the old hand as calls, and so into the saved hand)
+  // Only with nothing but fresh blinds in front (a dealer button misread at the hero during an all-in closed a running hand).
+  // Saved when the next hand starts; the same hero cards seen again open it again
+  { const dNow = Object.keys(cur).find(p => cur[p].dealer), dWant = H.n === 2 ? "SB" : "BTN", rs = raw.seats || [];   // the amounts as read: the stacks belong to the new hand
+    const blinds = rs.reduce((a, x) => a + (x.bet || 0), 0) <= 1.51 && !rs.some(x => x.allin || (typeof x.stack === "number" && x.stack <= .05));
+    if (dNow && dNow !== dWant && blinds && !(cards && cards === H.cards)) { H.dealMoved = (H.dealMoved || 0) + 1; if (H.dealMoved >= 2) { H.heroTurn = false; H.done = true; H.dealClosed = true; return H; } }
+    else H.dealMoved = 0; }
+  H.retroNow = false;
+  // the hero acted without the buttons ever being seen at this point (a pre-selected "Fold" or "Check", or a click faster
+  // than a picture): for the review it is still a decision. Hold his action back one picture and show the decision first,
+  // with the same fold inference as a seen turn
+  // only where the hero is really next to act: players before him whose action was not seen count as folded only when
+  // this picture shows them without cards and without new chips (a hand that is over, or a line that already holds the
+  // hero's action, is no decision)
+  // not in the first pictures of a hand: a seat not read yet makes it heads-up for a moment, and the hero's big blind then
+  // looked like chips he had put in as the small blind
+  const retroAt = () => { if (H.street !== 0 || H.heroFolded || !(H.n === 2 || H.n === 3) || H.nf < 3) return false;
+    const hc = cur[H.heroPos], hs = H.slots.find(x => x.hero); if ((hc && (hc.allin || (typeof hc.stack === "number" && hc.stack <= .05))) || (hs && hs.allin)) return false;   // all-in from the blind: nothing to decide
+    const line = spinLine(H).join("-"); H.retroDone = H.retroDone || {}; if (H.turnLine === line || H.retroDone[line]) return false;
+    const game = H.n === 2 ? "hu" : "3h", P = game === "hu" ? ["SB", "BB"] : ["BTN", "SB", "BB"], folds = [];
+    let path = line, ok = false;
+    for (let g = 0; g < 3; g++) { let nx; try { nx = P[lineActors(game, path).next]; } catch (e) { break; }
+      if (!nx) break; if (nx === H.heroPos) { ok = spinHeroOpen(game, path, P.indexOf(H.heroPos)); break; }
+      const sl = H.slots.find(x => x.pos === nx), c = cur[nx]; if (!sl || sl.folded || sl.hero || sl.allin) break;
+      // without cards: no card backs seen (a folded player's name plate is not always dimmed once the pot is pushed; a
+      // player who acted has chips in front or a label, and those are kept out by the chips)
+      if (!c || c.backs || c.allin || (c.bet || 0) > (H.streets[0].com[nx] || 0) + .01) break;
+      folds.push(sl); path = path ? path + "-F" : "F"; }
+    if (!ok) return false;
+    H.retroDone[line] = true; for (const sl of folds) { sl.folded = true; ctAct(H, sl.pos, "fold"); }
+    H.turnLine = spinLine(H).join("-"); H.retroDone[H.turnLine] = true; H.heroTurn = true; H.retroNow = true; H.turnActs = H.streets[0].acts.length; H.ver++; return true; };
+  if (!cards && (H.noCards || 0) + 1 >= 3 && !H.heroFolded && retroAt()) return H;
   if (!cards) { H.noCards = (H.noCards || 0) + 1; if (H.noCards >= 3 && !H.heroFolded) { H.heroFolded = true; ctAct(H, H.heroPos, "fold"); } } else H.noCards = 0;
   // the same cards are back (a popup or an animation hid them): the hero did not fold, take the fold back
   if (cards && cards === H.cards && H.heroFolded) { const acts = H.streets[H.street].acts; for (let i = acts.length - 1; i >= 0; i--) if (acts[i].pos === H.heroPos && acts[i].t === "fold") { acts.splice(i, 1); break; } H.heroFolded = false; H.ver++; }
   const bc = raw.board || 0, sIdx = bc >= 5 ? 3 : bc >= 4 ? 2 : bc >= 3 ? 1 : 0;
+  // the flop came while the hero never acted preflop (his option as big blind, checked without buttons): that check was a decision
+  if (sIdx > H.street && H.street === 0 && !H.streets[0].acts.some(a => a.pos === H.heroPos && !a.est) && retroAt()) return H;
   if (sIdx > H.street && sIdx <= 3) {
     ctCloseStreet(H);
     while (H.street < sIdx) { const pot = ctPot(H); H.street++; H.streets.push({ name: STREETS[H.street], board: [], pot, acts: [], com: {}, max: 0, last: postOrderOf(H).slice(-1)[0] }); }
     for (const sl of H.slots) sl.pend = null;
   }
   const st = H.streets[H.street];
+  { const hc = cur[H.heroPos]; if (H.street === 0 && hc && (hc.bet || 0) > (st.com[H.heroPos] || 0) + .01 && !(raw.buttons && cards) && retroAt()) {   // his chips moved: same
+      const hs = H.slots.find(x => x.hero); if (hs) hs.pend = { v: hc.bet, n: 1 }; return H; } }   // counted, so his chips go in with the next picture
   if (H.street > 0 && raw.board_cards && raw.board_cards.length) { const nb = raw.board_cards; if (nb.filter(Boolean).length >= st.board.filter(Boolean).length) { st.board = nb.slice(); H.ver++; } }
   // folds and bets seen in this frame go into the line in acting order: a BTN limp and an SB fold that show up in the same
   // frame are "L-F", not "F-L" (the fold used to be written first, so the hero got the advice for the wrong spot)
@@ -5127,15 +5217,31 @@ function spinTrack(raw, t, manual) {
   // frame or two his cards are not seen. A player who is all-in or has the highest bet of the street has nothing to
   // fold to: he stays in (a raise or a jam read as a fold left the hero without advice when facing it)
   const maxBet = Math.max(0, ...Object.values(cur).map(c => c.bet || 0));
-  const heroActed = H.heroFolded || H.streets[0].acts.some(a => a.pos === H.heroPos), heroOrd = H.order.indexOf(H.heroPos);
+  const heroActed = H.heroFolded || H.streets[0].acts.some(a => a.pos === H.heroPos) || (H.street === 0 && cur[H.heroPos] && (cur[H.heroPos].bet || 0) > (H.streets[0].com[H.heroPos] || 0) + .01), heroOrd = H.order.indexOf(H.heroPos);
   const badFrame = H.slots.filter(sl => !sl.hero && !sl.folded && cur[sl.pos] && !cur[sl.pos].cards && !cur[sl.pos].allin).length >= 2;
-  for (const sl of H.slots) { if (sl.hero || sl.folded) continue; const s = cur[sl.pos]; if (!s) continue;
+  // the hero's own new chips in this picture: the buttons still up are the ones he just clicked, nobody else has acted on
+  // his action yet (a hidden card back right then folded the player who then went all-in over him)
+  const heroNow = H.street === 0 && !!cur[H.heroPos] && (cur[H.heroPos].bet || 0) > (H.streets[0].com[H.heroPos] || 0) + .01;
+  // by the line so far it is the hero's turn: nobody else acts now, a card back not seen in one picture is no fold (after
+  // "R-J" the raiser, who acts after the hero, was folded and the hero got the advice for the wrong line)
+  let heroNext = false;
+  if (H.street === 0 && (H.n === 2 || H.n === 3)) { const gm = H.n === 2 ? "hu" : "3h", P3 = gm === "hu" ? ["SB", "BB"] : ["BTN", "SB", "BB"], ln = spinLine(H).join("-");
+    try { heroNext = P3[lineActors(gm, ln).next] === H.heroPos && spinHeroOpen(gm, ln, P3.indexOf(H.heroPos)); } catch (e) {} }
+  // the buttons show there is still somebody to play against: the last opponent is never folded on one picture
+  const oppIn = H.slots.filter(x => !x.hero && !x.folded).length;
+  // a player read as folded who then puts chips in had not folded (his card backs were hidden or misread): as long as
+  // nobody acted after that fold, it is taken back after two pictures and his bet counts in its place
+  if (H.street === 0) for (const sl of H.slots) { if (sl.hero || !sl.folded) continue; const s = cur[sl.pos], acts = H.streets[0].acts, last = acts.filter(a => !a.est).slice(-1)[0];
+    if (!s || !(last && last.pos === sl.pos && last.t === "fold") || !((s.bet || 0) > (H.streets[0].com[sl.pos] || 0) + .01) || !(s.allin || s.cards)) { sl.unfold = 0; continue; }
+    if (++sl.unfold < 2) continue;
+    acts.splice(acts.lastIndexOf(last), 1); sl.folded = false; sl.miss = 0; sl.unfold = 0; H.ver++; }
+  for (const sl of H.slots) { if (sl.hero || sl.folded) continue; const s = cur[sl.pos]; if (!s) continue; sl.unseen = 0;
     if (!s.cards && (s.allin || (s.bet || 0) >= maxBet - .01)) { sl.miss = 0; continue; }
     // preflop, before the hero's first action, a player after him has not had his turn: he cannot have folded
     if (H.street === 0 && !heroActed && H.order.indexOf(sl.pos) > heroOrd) { sl.miss = 0; continue; }
     // out of the hand: two frames without cards, or one when the hero is to act (the line must be complete then), unless
     // several players lost their cards in the same picture: that picture is bad (an animation, a misread), not two folds
-    if (!s.cards) { sl.miss++; if (sl.miss >= 2 || (raw.buttons && cards && !badFrame)) { sl.folded = true; ev.push({ pos: sl.pos, fold: true }); } } else sl.miss = 0; }
+    if (!s.cards) { sl.miss++; if (sl.miss >= 2 || (raw.buttons && cards && !badFrame && !heroNow && !heroNext && oppIn > 1)) { sl.folded = true; ev.push({ pos: sl.pos, fold: true }); } } else sl.miss = 0; }
   const decision = !!(raw.buttons && cards), vals = ev;
   const heroDone = H.heroFolded || H.streets[0].acts.some(a => a.pos === H.heroPos), hOrd = H.order.indexOf(H.heroPos);
   for (const sl of H.slots) { if (sl.folded) continue; const s = cur[sl.pos]; if (!s) continue; sl.stack = s.stack;
@@ -5159,12 +5265,15 @@ function spinTrack(raw, t, manual) {
   // not right after the hero's own action: the buttons stay up a moment after his click, and the players after him have
   // not had their turn yet (a raise read as "everybody folded" lost the re-raise or the all-in that came next)
   const lastOwn = (() => { const ac = H.streets[0].acts.filter(x => !x.est), l = ac[ac.length - 1]; return !!(l && l.pos === H.heroPos); })();
-  if (decision && !lastOwn && H.street === 0 && (H.n === 2 || H.n === 3)) {
+  if (decision && !lastOwn && !heroNow && H.street === 0 && (H.n === 2 || H.n === 3)) {
     const game = H.n === 2 ? "hu" : "3h", P = game === "hu" ? ["SB", "BB"] : ["BTN", "SB", "BB"];
     for (let g = 0; g < 3; g++) {
       const nx = P[lineActors(game, spinLine(H).join("-")).next]; if (!nx || nx === H.heroPos) break;
       const sl = H.slots.find(x => x.pos === nx); if (!sl || sl.folded || sl.hero || sl.allin) break;
       const c = cur[nx]; if (c && (c.bet || 0) > (H.streets[0].com[nx] || 0) + .01) break;   // he put chips in: that bet is still coming
+      // his seat not read: only from the second such picture (a jam whose seat was missed in one picture became a fold)
+      if (!c) { sl.unseen = (sl.unseen || 0) + 1; if (sl.unseen < 2) break; }
+      if (!H.slots.some(x => !x.hero && !x.folded && x !== sl)) break;   // the buttons say somebody is still in
       sl.folded = true; ctAct(H, nx, "fold");
     }
   }
@@ -5184,7 +5293,12 @@ function spinTrack(raw, t, manual) {
   const holdTurn = !decision && wasTurn && H.turnActs === actsN && (H.turnMiss || 0) < 2 && !!cards;
   H.turnMiss = decision ? 0 : holdTurn ? (H.turnMiss || 0) + 1 : 0;
   H.heroTurn = (decision || holdTurn) && !noDecision && !(lastAct && lastAct.pos === H.heroPos && !H.streets[H.street].acts.slice(H.streets[H.street].acts.indexOf(lastAct) + 1).some(a => a.pos !== H.heroPos));
-  if (H.heroTurn) H.turnActs = H.streets[H.street].acts.length;
+  // preflop the line must put the hero next with something to decide: a line that stops short (a fold not seen yet) shows
+  // nothing for that picture instead of "no advice for this line", and the next picture completes it
+  if (H.heroTurn && H.street === 0 && (H.n === 2 || H.n === 3) && !H.retroNow) { const gm = H.n === 2 ? "hu" : "3h", P3 = gm === "hu" ? ["SB", "BB"] : ["BTN", "SB", "BB"], ln = spinLine(H).join("-");
+    let ok = false; try { ok = P3[lineActors(gm, ln).next] === H.heroPos && spinHeroOpen(gm, ln, P3.indexOf(H.heroPos)); } catch (e) {}
+    if (!ok) H.heroTurn = false; }
+  if (H.heroTurn) { H.turnActs = H.streets[H.street].acts.length; if (H.street === 0) H.turnLine = spinLine(H).join("-"); }
   return H;
 }
 // ---- early-level advice: which solver node the hero is at ----
@@ -5682,7 +5796,7 @@ function tmThumb(c) { const x = tmThumbC.getContext("2d", { willReadFrequently: 
 function tmChanged(i, c) { const g = tmThumb(c), o = TM.thumbs[i]; TM.thumbs[i] = g; if (!o) return true; for (let k = 0; k < g.length; k++) if (Math.abs(g[k] - o[k]) > 10) return true; return false; }
 // called by mtReadAll for each table crop
 function tmRead(i, crop, opts) {
-  const now = performance.now(), c = TM.cache[i];
+  const now = typeof mtClock === "function" ? mtClock() : performance.now(), c = TM.cache[i];
   if (c && now - c.t < 4000 && !tmChanged(i, crop)) return c.r;
   if (!c) tmChanged(i, crop);
   const r = LR.read(crop, opts); TM.cache[i] = { r, t: now }; return r;
