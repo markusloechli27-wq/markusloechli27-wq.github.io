@@ -5459,8 +5459,11 @@ function quadData(i) {
   const H = T.game === "cash" ? T.hand : T.sh;
   return { T, H, sp, game: T.game };
 }
-function actText(a) {
+function actText(a, s) {
   const n = a.to != null ? ` ${String(Math.round(a.to * 10) / 10).replace(".", ",")}` : "";
+  // preflop with no raise before: chips up to the big blind are a limp, and the big blind himself checks (it was "Call 1")
+  if (a.t === "call" && s && s.acts && /^pre/i.test(s.name || "")) { const k = s.acts.indexOf(a);
+    if (k >= 0 && !s.acts.slice(0, k).some(x => x.t === "raise" || x.t === "bet")) return a.pos === "BB" ? "Check" : "Limp"; }
   return a.t === "fold" ? "Fold" : a.t === "check" ? "Check" : a.t === "call" ? `Call${n}` : a.t === "bet" ? `Bet${n}` : a.t === "raise" ? (a.allin ? `All-in${n}` : `Raise${n}`) : a.t;
 }
 function boardHtml(b) { const cs = (b || []).filter(Boolean).map(x => ({ r: x[0], s: x[1] })); return cs.length ? cardsHtml(cs) : ""; }
@@ -5472,7 +5475,7 @@ function quadField(i) {
   const now = H.heroTurn ? `<span class="pill on">Hero am Zug</span>` : H.done ? `<span class="muted">Hand vorbei</span>` : `<span class="muted">${last ? `Zuletzt: ${last.pos} ${actText(last)}` : `${STREETS[H.street]} läuft`}</span>`;
   let h = `<div class="qfield${H.heroTurn ? " turn" : ""}">${head}<span class="qf-game">${q.game === "cash" ? "Rush & Cash" : H.n === 2 ? "Spin HU" : "Spin"}</span>${now}</div>`;
   h += `<div class="qf-cards"><span class="cardsview">${cp ? cardsHtml(cp.cs) : `<span class="muted">Karten ?</span>`}</span><span class="qf-pos">${hero}</span>${H.street ? `<span class="cardsview">${boardHtml(st.board)}</span><span class="muted">Pot ${CBB(ctPot(H))} BB</span>` : ""}<button type="button" class="btn qpick" data-qpick="${i}">Karten wählen</button></div>`;
-  h += `<ol class="qf-hist">${H.streets.map(s => `<li><b>${s.name}</b> ${s.acts.filter(a => !a.est || a.t === "check").map(a => `<span class="${a.pos === hero ? "me" : ""}">${a.pos} ${actText(a)}</span>`).join(" · ") || `<span class="muted">—</span>`}</li>`).join("")}</ol>`;
+  h += `<ol class="qf-hist">${H.streets.map(s => `<li><b>${s.name}</b> ${s.acts.filter(a => !a.est || a.t === "check").map(a => `<span class="${a.pos === hero ? "me" : ""}">${a.pos} ${actText(a, s)}</span>`).join(" · ") || `<span class="muted">—</span>`}</li>`).join("")}</ol>`;
   // the hero's range at his current (or last) decision
   let rng = "";
   if (q.game !== "cash") {
@@ -5938,7 +5941,7 @@ function tmField(i) {
   const seats = order.map(p => { const sl = H.slots.find(s => s.pos === p); if (!sl) return "";
     const nm = (tmNameOf(T || {}, sl.ang) || {}).name || (sl.hero ? "Du" : ""), bet = st.com[p] || 0, tg = sl.hero ? null : tmTagOf(T, sl), tl = tg ? (EX_TYPES.find(t => t[0] === tg) || [0, ""])[1] : "";
     return `<div class="tm-seat${sl.folded ? " out" : ""}${sl.hero ? " me" : ""}"${sl.hero ? "" : ` data-tmtag="${i}|${p}" role="button" title="Antippen: Spielertyp setzen"`}><b>${p}</b><span class="nm">${nm}${tl ? ` <i class="tm-tag">${tl}</i>` : sl.hero ? "" : ` <i class="tm-tag dim">Typ?</i>`}</span><span class="num">${CBB(sl.stack != null ? sl.stack : sl.start)}</span>${bet ? `<span class="bet">${CBB(bet)}</span>` : ""}</div>`; }).join("");
-  const hist = H.streets.map(s => `<div class="tm-st"><b>${s.name}</b>${s.board && s.board.filter(Boolean).length ? ` <span class="cardsview">${boardHtml(s.board)}</span>` : ""} ${s.acts.filter(a => !a.est || a.t === "check").map(a => `<span class="${a.pos === H.heroPos ? "me" : ""}">${a.pos} ${actText(a)}</span>`).join(" · ") || `<span class="muted">—</span>`}</div>`).join("");
+  const hist = H.streets.map(s => `<div class="tm-st"><b>${s.name}</b>${s.board && s.board.filter(Boolean).length ? ` <span class="cardsview">${boardHtml(s.board)}</span>` : ""} ${s.acts.filter(a => !a.est || a.t === "check").map(a => `<span class="${a.pos === H.heroPos ? "me" : ""}">${a.pos} ${actText(a, s)}</span>`).join(" · ") || `<span class="muted">—</span>`}</div>`).join("");
   return `<div class="tmf${live ? " turn" : ""}">${head(`<span class="cardsview">${cp ? cardsHtml(cp.cs) : `<span class="muted">Karten ?</span>`}</span><span class="tm-pos">${H.heroPos}</span>${H.n === 2 ? `<span class="muted">HU</span>` : ""}`)}
     ${range}<div class="tmf-side"><div class="tmf-hist">${seats}<div class="tm-pot">Pot ${CBB(ctPot(H))} BB</div>${hist}</div>
     <div class="tmf-act">${live ? `<span class="tm-turn">DU BIST DRAN</span>` : ""}<div class="tm-main">${act || (live ? `<span class="muted">keine Lösung für diese Stelle</span>` : "")}</div>${live ? rows : ""}${ver ? `<div>${ver}</div>` : ""}</div></div></div>`;
