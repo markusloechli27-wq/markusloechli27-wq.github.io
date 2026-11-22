@@ -89,6 +89,25 @@ int main(int argc, char **argv) {
       float *w0 = malloc(sizeof(float) * H0); for (int h = 0; h < H0; h++) w0[h] = W[0][h] * st0[ci * H0 + h];
       for (int a = 0; a < NODES[chk].nact; a++) { bet = NODES[chk].child + a; if (NODES[bet].acttype != A_BET || NODES[bet].type != N_ACTION) continue;
         char nm[16]; snprintf(nm, sizeof nm, "vs%s", lab(bet, P0)); printf(","); node_out(stdout, nm, bet, w0, NULL); }
+      // 22 Nov 2026: the answers to a raise. IP bet and OOP went all-in over it ("xr<size>", IP's reach: his bet
+      // frequency); IP went all-in at once ("vsallin", OOP); OOP led and IP went all-in ("lr<size>", OOP's reach: his lead
+      // frequency); OOP led all-in ("vslallin", IP). The tree always had these spots, only they were not written.
+      int H1 = NH[1], n1 = NODES[chk].nact; float *st1 = malloc(sizeof(float) * n1 * H1), *w1 = malloc(sizeof(float) * H1); memcpy(st1, pf_strategy(chk), sizeof(float) * n1 * H1);   // node_out reuses the strategy buffer
+      for (int a = 0; a < NODES[chk].nact; a++) { int c = NODES[chk].child + a; if (NODES[c].type != N_ACTION) continue;
+        if (NODES[c].acttype == A_ALLIN) { printf(","); node_out(stdout, "vsallin", c, w0, NULL); continue; }
+        if (NODES[c].acttype != A_BET) continue;
+        for (int h = 0; h < H1; h++) w1[h] = W[1][h] * st1[a * H1 + h];
+        for (int b = 0; b < NODES[c].nact; b++) { int r = NODES[c].child + b; if (NODES[r].acttype != A_ALLIN || NODES[r].type != N_ACTION) continue;
+          char nm[16]; snprintf(nm, sizeof nm, "xr%s", lab(c, P0)); printf(","); node_out(stdout, nm, r, w1, NULL); } }
+      free(w1); free(st1);
+      int nr = NODES[root].nact; float *str = malloc(sizeof(float) * nr * H0), *wl = malloc(sizeof(float) * H0); memcpy(str, pf_strategy(root), sizeof(float) * nr * H0);
+      for (int a = 0; a < NODES[root].nact; a++) { int c = NODES[root].child + a; if (NODES[c].type != N_ACTION) continue;
+        if (NODES[c].acttype == A_ALLIN) { printf(","); node_out(stdout, "vslallin", c, W[1], NULL); continue; }
+        if (NODES[c].acttype != A_BET) continue;
+        for (int h = 0; h < H0; h++) wl[h] = W[0][h] * str[a * H0 + h];
+        for (int b = 0; b < NODES[c].nact; b++) { int r = NODES[c].child + b; if (NODES[r].acttype != A_ALLIN || NODES[r].type != N_ACTION) continue;
+          char nm[16]; snprintf(nm, sizeof nm, "lr%s", lab(c, P0)); printf(","); node_out(stdout, nm, r, wl, NULL); } }
+      free(wl); free(str);
       free(w0);
     }
     { // realized pot share per hand class and player (as pf/calib.c), so every flop solve also calibrates the preflop solver
