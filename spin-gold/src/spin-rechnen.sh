@@ -16,7 +16,7 @@ DIR=$(pwd)
 
 if [ "$1" = "status" ]; then
   echo "Dienst: $(systemctl is-active spin-gold 2>/dev/null)"
-  echo "Fertig: $(cat ergebnis.jsonl 2>/dev/null | wc -l) Preflop-Lösungen, $(cat cb-ergebnis.jsonl 2>/dev/null | wc -l) Flops"
+  echo "Fertig: $(cat ergebnis.jsonl 2>/dev/null | wc -l) Preflop-Lösungen, $(cat cb-ergebnis.jsonl 2>/dev/null | wc -l) Flops, $(cat p3-ergebnis.jsonl 2>/dev/null | wc -l) 3-Wege-Flops"
   command -v vcgencmd > /dev/null && vcgencmd measure_temp 2>/dev/null
   free -h | head -2
   tail -n 3 log.txt 2>/dev/null
@@ -25,14 +25,14 @@ if [ "$1" = "status" ]; then
 fi
 
 if [ "$1" = "stopp" ]; then
-  sudo systemctl disable --now spin-gold > /dev/null 2>&1; pkill -f spin-pi.py 2> /dev/null; pkill -x mr2 2> /dev/null
+  sudo systemctl disable --now spin-gold > /dev/null 2>&1; pkill -f spin-pi.py 2> /dev/null; pkill -x mr2 2> /dev/null; pkill -x pf3 2> /dev/null
   echo "Gestoppt. Fertige Lösungen bleiben erhalten; neu starten mit: sh spin-rechnen.sh"
   exit 0
 fi
 
 if [ "$1" = "senden" ]; then
-  [ -s ergebnis.jsonl ] || [ -s cb-ergebnis.jsonl ] || { echo "Noch keine Lösung fertig."; exit 0; }
-  out="spin-ergebnis-$(date +%Y%m%d-%H%M).txt"; cat ergebnis.jsonl cb-ergebnis.jsonl > "$out" 2>/dev/null
+  [ -s ergebnis.jsonl ] || [ -s cb-ergebnis.jsonl ] || [ -s p3-ergebnis.jsonl ] || { echo "Noch keine Lösung fertig."; exit 0; }
+  out="spin-ergebnis-$(date +%Y%m%d-%H%M).txt"; cat ergebnis.jsonl cb-ergebnis.jsonl p3-ergebnis.jsonl > "$out" 2>/dev/null
   P=8731
   echo "$(wc -l < "$out") Lösungen in $out ($(du -h "$out" | cut -f1))"
   echo "Im iPhone-Browser öffnen:"

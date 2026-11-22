@@ -2,7 +2,8 @@
 # Spin & Gold on the Raspberry Pi for the poker review app.
 # Takes its work from GitHub Pages (spin-auftrag.json): preflop solves with mr2 (one stack combination each,
 # results in ergebnis.jsonl), then flop solves with cbet (one flop of one spot each, results in cb-ergebnis.jsonl),
-# then the less urgent preflop solves in 'late' (finer ChipEV grid, payout models with prizes for 2nd and 3rd).
+# 3-way flops with pf3 before the 2-player flops ('p3': one flop of one 3-way spot each, several at once, results in
+# p3-ergebnis.jsonl), then the less urgent preflop solves in 'late' (finer ChipEV grid, payout models with prizes for 2nd and 3rd).
 # Each preflop solve also solves the lines nobody plays with an assumed range (mr2 PATCH=1, version 'vp'); 'patch' and
 # 'patch_late' redo combinations that so far only have the base result.
 # Waits while there is nothing to do and checks for new work, so new tasks arrive without a new command on the Pi.
@@ -64,6 +65,14 @@ def prepare(job):  # programs and calibration of this job version
         if r.returncode: raise RuntimeError('Kompilieren fehlgeschlagen: ' + r.stderr[-300:])
         open('.cbver', 'w').write(cbkey); log('Flop-Programm', cb['v'], cb.get('pfsolve', ''), 'bereit')
 
+    p3 = job.get('p3')
+    p3key = p3 and '|'.join((p3['v'], p3['src'], p3['ranges']))
+    if p3 and (not os.path.exists('.p3ver') or open('.p3ver').read() != p3key):
+        fetch('pf3.c', p3['src']); fetch('spin-cb-ranges.json', p3['ranges'])
+        r = subprocess.run(['gcc', '-O3', '-march=native', '-o', 'pf3', 'pf3.c', '-lm'], capture_output=True, text=True)
+        if r.returncode: raise RuntimeError('Kompilieren fehlgeschlagen: ' + r.stderr[-300:])
+        open('.p3ver', 'w').write(p3key); log('3-Wege-Programm', p3['v'], 'bereit')
+
 def preflop(job, m, k):
     t0 = time.time(); st = k.replace('|', ',')
     env = dict(os.environ, STACKS=st, MODEL=str(MODELS.index(m)), **({'PATCH': '1'} if job.get('vp') else {}))
@@ -89,6 +98,22 @@ def flop(cb, t):
     done = len(keys('cb-ergebnis.jsonl', lambda o: (o['v'], o['sid'], o['r']['flop'])) & {(cb['v'], a[0], a[1]) for a in cb['tasks']})
     log('Flop %s %s fertig in %.0f s (%d von %d)' % (sid, fl, time.time() - t0, done, len(cb['tasks']))); return True
 
+def flop3(p3, ts):   # several 3-way flops at once (one core each, about 30 MB each)
+    t0 = time.time(); procs = []
+    for i, (sid, fl, pot, stack) in enumerate(ts):
+        fn = 'fl3_%d.txt' % i; open(fn, 'w').write(fl + ' 1\n')
+        procs.append((sid, fl, subprocess.Popen(['./pf3', 'spin-cb-ranges.json', sid + '_0', sid + '_1', sid + '_2', str(pot), str(stack), fn, '1', '0', '1'],
+                                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)))
+    ok = 0
+    for sid, fl, pr in procs:
+        out, err = pr.communicate()
+        if pr.returncode or not out.strip(): log('Fehler bei', sid, fl, pr.returncode, err[-200:]); continue
+        with open('p3-ergebnis.jsonl', 'a') as f: f.write(json.dumps({'v': p3['v'], 'sid': sid, 'r': json.loads(out)}, separators=(',', ':')) + '\n')
+        ok += 1
+    done = len(keys('p3-ergebnis.jsonl', lambda o: (o['v'], o['sid'], o['r']['flop'])) & {(p3['v'], a[0], a[1]) for a in p3['tasks']})
+    log('3-Wege %s fertig in %.0f s (%d von %d)' % (', '.join(t[0][3:] + ' ' + t[1] for t in ts), time.time() - t0, done, len(p3['tasks'])))
+    if not ok: time.sleep(60)
+
 while True:
     try: job = json.loads(get('spin-auftrag.json'))
     except Exception as e: log('Auftrag nicht erreichbar:', e); time.sleep(300); continue
@@ -97,7 +122,7 @@ while True:
             for f, w in (('spin-pi.py', job['worker']), ('spin-rechnen.sh', job.get('script'))): fetch(f, w)
             log('Neue Version geladen, starte neu'); sys.exit(0)
         except Exception as e: log(e); time.sleep(300); continue
-    if not job.get('tasks') and not job.get('cb') and not job.get('late'): log('Warte auf Aufgaben:', job.get('info', '')); time.sleep(600); continue
+    if not job.get('tasks') and not job.get('cb') and not job.get('late') and not job.get('p3'): log('Warte auf Aufgaben:', job.get('info', '')); time.sleep(600); continue
     try: prepare(job)
     except Exception as e: log(e); time.sleep(300); continue
     v = job['v']; done = keys('ergebnis.jsonl', lambda o: (o['v'], o['m'], o['k']))
@@ -106,6 +131,12 @@ while True:
         for m, k in todo[:5]:               # look at the job again after a few solves
             if not preflop(job, m, k): time.sleep(60); break
         continue
+    p3 = job.get('p3')
+    if p3 and p3.get('tasks'):
+        pdone = keys('p3-ergebnis.jsonl', lambda o: (o['v'], o['sid'], o['r']['flop']))
+        ptodo = [t for t in p3['tasks'] if (p3['v'], t[0], t[1]) not in pdone]
+        n3 = max(1, min(3, (os.cpu_count() or 1) - 1, (mem_free_mb() - 300) // 60))   # Jarvis keeps a core and some memory
+        if ptodo: flop3(p3, ptodo[:n3]); continue
     cb = job.get('cb')
     if cb:
         cdone = keys('cb-ergebnis.jsonl', lambda o: (o['v'], o['sid'], o['r']['flop']))
