@@ -61,7 +61,12 @@ $ramMB = [int]($cs.TotalPhysicalMemory / 1MB)
 $cores = [int]$cs.NumberOfLogicalProcessors
 if ($Kerne -le 0) { $Kerne = [Math]::Max(1, $cores - 1) }   # one core stays free for the PC itself
 $budget = [int]($ramMB * $SpeicherProzent / 100)
-function FreiMB { [int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1KB) }
+# available memory incl. the Windows file cache (standby): 'free' alone stays low for hours after GG or a browser ran,
+# 22/23 Nov 2026 the PC waited 9 hours with nothing started. The class name is not translated, unlike Get-Counter.
+function FreiMB {
+  try { $m = [int](Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory -ErrorAction Stop).AvailableMBytes; if ($m -gt 0) { return $m } } catch {}
+  [int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1KB) }
+$lastWait = Get-Date
 Log "PC: $cores Kerne, $ramMB MB Speicher. Rechne mit $Kerne Kernen, höchstens $budget MB."
 
 # ---- 4-bit packing, same format as the app and the Pi ----
@@ -192,8 +197,12 @@ while ($true) {
   foreach ($r in @($running)) { if ($r.p.HasExited) { $running.Remove($r); Fertig $r } }
   $used = 0; foreach ($r in $running) { $used += $r.t.mb }
   while ($running.Count -lt $Kerne -and $todo.Count -gt 0 -and (Get-Date) -lt $nextJob) {   # next task that fits into the memory budget (every 2 h: let them finish, then read the job again)
-    $pick = $null; foreach ($t in $todo) { if ($used + $t.mb -le $budget -and $t.mb + 500 -le (FreiMB)) { $pick = $t; break } }
-    if (-not $pick) { break }
+    $frei = FreiMB; $pick = $null; foreach ($t in $todo) { if ($used + $t.mb -le $budget -and $t.mb + 500 -le $frei) { $pick = $t; break } }
+    if (-not $pick) {
+      if ($running.Count -eq 0 -and ((Get-Date) - $lastWait).TotalMinutes -ge 30) {   # say why nothing runs
+        $min = 999999; foreach ($t in $todo) { if ($t.mb -lt $min) { $min = $t.mb } }
+        Log "Warte auf Speicher: frei $frei MB, kleinste Aufgabe $min MB (+500)."; $lastWait = Get-Date }
+      break }
     $todo.Remove($pick); Starte $pick; $used += $pick.mb
   }
   if ($running.Count -eq 0 -and $todo.Count -eq 0) { $nextJob = Get-Date }
